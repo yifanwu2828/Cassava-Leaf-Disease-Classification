@@ -1,4 +1,4 @@
-# ECE228 Team-4 - Projects
+# ECE228 Team-4 - `<ProjectsName>`
 ![GitHub repo size](https://img.shields.io/github/repo-size/yifanwu2828/ECE_228-Team-4)
 ![GitHub contributors](https://img.shields.io/github/contributors/yifanwu2828/ECE_228-Team-4)
 ![GitHub last commit](https://img.shields.io/github/last-commit/yifanwu2828/ECE_228-Team-4)
