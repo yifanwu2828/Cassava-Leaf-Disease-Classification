@@ -10,7 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 DATA = Union[torch.Tensor, np.ndarray]
 
 
-class Logger:
+class Logger(object):
     """
     Tensorboard Logger
     Before going further, more details on TensorBoard can be found at https://www.tensorflow.org/tensorboard/
@@ -23,6 +23,13 @@ class Logger:
         self._n_logged_samples = n_logged_samples
         self._summ_writer = SummaryWriter(log_dir, flush_secs=1, max_queue=1)
 
+    ##################################
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}"
+
+    ##################################
+
     @property
     def logdir(self) -> str:
         return self._log_dir
@@ -34,6 +41,9 @@ class Logger:
     @property
     def summ_writer(self):
         return self._summ_writer
+
+    #####################################################
+    #####################################################
 
     def log_scalar(self, name: str, scalar: Union[int, float, str], step=None) -> None:
         """
