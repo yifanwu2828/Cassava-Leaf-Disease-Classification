@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 
 
-DATA = TypeVar('DATA', torch.Tensor, np.ndarray)
+DATA = Union[torch.Tensor, np.ndarray]
 
 
 class Logger:
