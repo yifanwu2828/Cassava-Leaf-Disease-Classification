@@ -60,6 +60,28 @@ def build_mlp(input_size: int,
 
 #####################################################
 #####################################################
+# Best practice: copy this func under __init__ of custom module and change model to self and remove return
+def initialize_weights(model: torch.nn.Module):
+    """weight initialization"""
+    for m in model.modules():
+        if isinstance(m, nn.Conv2d):
+            nn.init.kaiming_uniform_(m.weight)
+
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+
+        elif isinstance(m, nn.BatchNorm2d):
+            nn.init.constant_(m.weight, 1)
+            nn.init.constant_(m.bias, 0)
+
+        elif isinstance(m, nn.Linear):
+            nn.init.kaiming_uniform_(m.weight, mode='fan_in', nonlinearity='relu')  # default Leaky relu
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+    return model
+
+#####################################################
+#####################################################
 
 device = None
 
