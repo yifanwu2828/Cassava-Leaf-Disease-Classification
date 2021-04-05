@@ -229,3 +229,7 @@ class Logger(object):
         Call this method to make sure that all pending events have been written to disk.
         """
         self._summ_writer.flush()
+
+    def close(self):
+        """ Close writer at the end of training """
+        self._summ_writer.close()
