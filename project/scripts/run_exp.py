@@ -19,6 +19,7 @@ from project.infrastructure.model_trainer import Model
 
 
 class MyModel(Model):
+    """ inherent from Model (subclass of nn.Module)"""
     def __init__(self, params: dict):
         super().__init__()
         self.params = params
@@ -41,6 +42,7 @@ class MyModel(Model):
         self.fc1 = nn.Linear(16 * 7 * 7, params["output_size"])
 
     def fetch_optimizer(self):
+        """set optimizer"""
         opt = optim.Adam(self.parameters(), lr=self.params["learning_rate"])
         return opt
 
@@ -69,6 +71,7 @@ class MyModel(Model):
         return out, loss
 
     def check_accuracy(self, loader):
+        """ simple acc check"""
         if loader.dataset.train:
             print("Checking accuracy on training data")
         else:
@@ -157,18 +160,19 @@ def main():
     ###################
     print("##### PARAM ########")
     path = os.getcwd()
+    print(f"Working Dir:{path}")
 
     # TODO: run training loop
     # load data
     train_dataset = datasets.MNIST(
-        root='../../data/',
+        root=params["data_dir"],
         train=True,
         transform=transforms.ToTensor(),
         download=True
     )
 
     test_dataset = datasets.MNIST(
-        root='../../data/',
+        root=params["data_dir"],
         train=False,
         transform=transforms.ToTensor(),
         download=True,
