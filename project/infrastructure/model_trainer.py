@@ -103,8 +103,12 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         if self.scheduler is None:
             self.scheduler = self.fetch_scheduler()
 
-        for epoch in tqdm(range(max_epochs)):
+        n_epochs_loop = tqdm(range(max_epochs), desc="XXX Learning", leave=False)
+        for epoch in n_epochs_loop:
             train_epoch_loss = self.train_one_epoch(self.train_loader)
+
+            # update progress bar
+            n_epochs_loop.set_postfix(epoch_loss=train_epoch_loss.item())
 
     def train_one_epoch(self, data_loader):
         """ train_one_epoch """
@@ -158,6 +162,7 @@ class MyModel(Model):
         self.fc1 = nn.Linear(16 * 7 * 7, params["output_size"])
 
     def fetch_optimizer(self):
+        """set optimizer"""
         opt = optim.Adam(self.parameters(), lr=self.params["learning_rate"])
         return opt
 
@@ -186,6 +191,7 @@ class MyModel(Model):
         return out, loss
 
     def check_accuracy(self, loader):
+        """ simple acc check"""
         if loader.dataset.train:
             print("Checking accuracy on training data")
         else:
