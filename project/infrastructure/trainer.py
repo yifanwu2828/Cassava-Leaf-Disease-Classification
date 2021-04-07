@@ -1,4 +1,5 @@
 from typing import Any, Dict, Iterable, List, Optional, Union
+import time
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,7 +13,7 @@ import torchvision.transforms as transforms
 from tqdm import tqdm
 
 import project.infrastructure.pytorch_util as ptu
-from logger import Logger
+from project.infrastructure.logger import Logger
 
 
 class DL_Trainer(object):
@@ -50,7 +51,7 @@ class DL_Trainer(object):
         ################
         ### Init Model
         ################
-        model_class = self.params['model_class']
+        # model_class = self.params['model_class']
         # TODO: define class
         # self.model = model_class(self.params['model_params'])
         self.model = self.params['model']

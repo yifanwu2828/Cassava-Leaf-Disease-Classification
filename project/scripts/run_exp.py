@@ -1,13 +1,12 @@
 import argparse
+import sys
 import os
 import time
-import sys
-sys.path.extend(['/home/yiw084/Desktop/UCSD/SP_21/ECE_228/ECE_228-Team-4/project'])
-print(sys.path)
+
 import torch
 import matplotlib.pyplot as plt
 
-from infrastructure.trainer import DL_Trainer
+from project.infrastructure.trainer import DL_Trainer
 
 
 
