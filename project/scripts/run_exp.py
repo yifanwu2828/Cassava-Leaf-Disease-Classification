@@ -16,7 +16,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 from project.infrastructure.model_trainer import Model
-
+import project.infrastructure.utils as utils
 
 class MyModel(Model):
     """ inherent from Model (subclass of nn.Module)"""
@@ -131,6 +131,7 @@ def main():
 
     parser.add_argument('--no_gpu', '-ngpu', action='store_true')
     parser.add_argument('--which_gpu', '-gpu_id', default=0)
+    parser.add_argument('--fp16', action='store_true', default=False)
     parser.add_argument('--video_log_freq', type=int, default=-1)  # -1 not log video
     parser.add_argument('--scalar_log_freq', type=int, default=1)
     parser.add_argument('--save_params', action='store_true', default=False)
@@ -158,7 +159,7 @@ def main():
     ###################
     # RUN TRAINING    #
     ###################
-    print("##### PARAM ########")
+    print("###### PARAM ########")
     path = os.getcwd()
     print(f"Working Dir:{path}")
 
@@ -185,6 +186,7 @@ def main():
     print(device)
 
     m = MyModel(params)
+    m.init_trainer(params)
     m.fit(train_dataset=train_dataset, train_batch_size=params["train_batch_size"],
           valid_dataset=test_dataset, valid_batch_size=params["valid_batch_size"],
           max_epochs=params["max_epochs"], device=device
@@ -195,5 +197,7 @@ def main():
 
 if __name__ == '__main__':
     print(torch.__version__)
+    start_time = utils.tic("###### Start Training ######")
     main()
     print("Done!")
+    utils.toc(start_time, "Finish Training")
