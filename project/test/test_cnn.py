@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 
 class CNN(nn.Module):
-    def __init__(self, in_channels, num_classes):
+    def __init__(self, in_channels=1, num_classes=10):
         super(CNN, self).__init__()
         ''' n_{out} = floor[(n_{in} + 2p - k) / s] + 1 '''
         # n_{in}: num of input features
