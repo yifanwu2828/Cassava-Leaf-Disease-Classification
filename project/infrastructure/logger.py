@@ -170,13 +170,13 @@ class Logger(object):
         assert figure.shape[0] > 0, "Figure logging requires input shape [batch x figures]!"
         self._summ_writer.add_figure(f'{name}_{phase}', figure, step, close=close)
 
-    def log_graph(self,
-                  model: torch.nn.Module,
-                  model_input: Union[torch.Tensor, List[torch.Tensor, None]] = None,
-                  verbose=False):
-        """Add NN graph data to summary."""
-        assert isinstance(model, torch.nn.Module), "model should be type torch.nn.Module"
-        self._summ_writer.add_graph(model, input_to_model=model_input, verbose=verbose)
+    # def log_graph(self,
+    #               model: torch.nn.Module,
+    #               model_input: Union[torch.Tensor, List[torch.Tensor, None]] = None,
+    #               verbose=False):
+    #     """Add NN graph data to summary."""
+    #     assert isinstance(model, torch.nn.Module), "model should be type torch.nn.Module"
+    #     self._summ_writer.add_graph(model, input_to_model=model_input, verbose=verbose)
 
     def log_pr_curve(self,
                      name: str,
