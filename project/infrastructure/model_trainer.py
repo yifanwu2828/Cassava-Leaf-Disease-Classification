@@ -12,12 +12,16 @@ import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from tqdm import tqdm
 
+import project.infrastructure.pytorch_util as ptu
+
 
 class Model(nn.Module, metaclass=abc.ABCMeta):
     """ simple model trainer """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        self.params = None
 
         # Data Loader
         self.train_loader = None
@@ -31,10 +35,42 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         self.current_train_step = 0
         self.current_valid_step = 0
 
+        # GPU or CPU
         self.device = None
+
+        # Use automatic mixed precision training in GPU
         self.fp16 = False
+        self.scaler = None
+
+        # Timer
+        self.start_time = None
+        self.end_time = None
+
+    def init_trainer(self, params: dict):
+        """ Init"""
+        self.params = params
+
+        # Set random seeds
+        seed = self.params['seed']
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+
+        # init gpu
+        self.params['use_gpu'] = not self.params['no_gpu']
+        ptu.init_gpu(
+            use_gpu=self.params['use_gpu'],
+            gpu_id=self.params['which_gpu']
+        )
+        self.device = ptu.device
+        print(f"############ {self.device} ############")
+
+        self.fp16 = params["fp16"]
+        if self.fp16 and self.params['use_gpu']:
+            self.scaler = torch.cuda.amp.GradScaler()
 
     #######################################################
+
     @abc.abstractmethod
     def fetch_optimizer(self, *args, **kwargs):
         """
@@ -67,9 +103,11 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             valid_sampler=None,
             shuffle=True,
             num_workers=4,
-            fp16=False
+            use_fp16=False
     ):
         """ fit the model """
+        self.fp16 = use_fp16
+
         if self.train_loader is None:
             self.train_loader = DataLoader(
                 dataset=train_dataset,
@@ -103,12 +141,14 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         if self.scheduler is None:
             self.scheduler = self.fetch_scheduler()
 
+        self.start_time = time.time()
         n_epochs_loop = tqdm(range(max_epochs), desc="XXX Learning", leave=False)
         for epoch in n_epochs_loop:
             train_epoch_loss = self.train_one_epoch(self.train_loader)
 
             # update progress bar
             n_epochs_loop.set_postfix(epoch_loss=train_epoch_loss.item())
+        self.end_time = time.time() - self.start_time
 
     def train_one_epoch(self, data_loader):
         """ train_one_epoch """
@@ -129,12 +169,25 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
         targets = targets.to(device=self.device)
         _, loss = self.forward(data, targets)
-        loss.backward()
-        self.optimizer.step()
-        if self.scheduler is not None:
-            self.scheduler.step()
 
+        # use mix amp
+        if self.fp16 and torch.cuda.is_available():
+            assert self.scaler is not None, "amp.GradScaler() is not init"
+            with torch.cuda.amp.autocast():
+                self.scaler.scale(loss).backward()
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+        else:
+            loss.backward()
+            self.optimizer.step()
+
+        if self.scheduler:
+            self.scheduler.step()
         return loss
+
+    def monitor_metrics(self, *args, **kwargs):
+        """ show metrics"""
+        return
 
 
 ###########################################
