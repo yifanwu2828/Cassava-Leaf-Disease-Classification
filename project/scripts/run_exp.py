@@ -1,9 +1,14 @@
 import argparse
 import os
 import time
-
+import sys
+sys.path.extend(['/home/yiw084/Desktop/UCSD/SP_21/ECE_228/ECE_228-Team-4/project'])
+print(sys.path)
 import torch
 import matplotlib.pyplot as plt
+
+from infrastructure.trainer import DL_Trainer
+
 
 
 def main():
@@ -18,15 +23,19 @@ def main():
     parser.add_argument('--learning_rate', '-lr', type=float, default=5e-3)
 
     parser.add_argument(
-        '--num_epochs', '-n', type=int, default=1,
+        '--max__epochs', '-n', type=int, default=10,
         help='Number of epochs'
     )
     parser.add_argument(
-        '--train_batch_size', type=int, default=10,
+        '--min__epochs', '-min', type=int, default=1,
+        help='Number of epochs'
+    )
+    parser.add_argument(
+        '--train_batch_size', type=int, default=64,
         help='Size of train batches'
     )
     parser.add_argument(
-        '--eval_batch_size', type=int, default=100,
+        '--eval_batch_size', type=int, default=64,
         help='Size of eval batches'
     )
 
@@ -50,7 +59,7 @@ def main():
     if not (os.path.exists(data_path)):
         os.makedirs(data_path)
 
-    logdir = args.exp_name + '_' + args.env_name + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    logdir = args.exp_name + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     logdir = os.path.join(data_path, logdir)
     params['logdir'] = logdir
     if not (os.path.exists(logdir)):
@@ -61,7 +70,13 @@ def main():
     ###################
     print("##### PARAM ########")
     path = os.getcwd()
+    print (path)
     # TODO: run training loop
+    print(params)
+
+    trainer = DL_Trainer(params)
+
+
 
 
 if __name__ == '__main__':
