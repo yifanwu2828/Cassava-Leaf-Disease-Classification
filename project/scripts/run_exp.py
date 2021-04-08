@@ -13,14 +13,17 @@ import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 import torchvision
 from tqdm import tqdm
+from sklearn import metrics
 import matplotlib.pyplot as plt
 
 from project.infrastructure.model_trainer import Model
 import project.infrastructure.utils as utils
+import project.infrastructure.pytorch_util as ptu
 
 
 class MyModel(Model):
     """ inherent from Model (subclass of nn.Module)"""
+
     def __init__(self, params: dict):
         super().__init__()
         self.params = params
@@ -71,30 +74,28 @@ class MyModel(Model):
 
         return out, loss
 
-    def check_accuracy(self, loader):
-        """ simple acc check"""
-        if loader.dataset.train:
-            print("Checking accuracy on training data")
-        else:
-            print("Checking accuracy on test data")
-        num_correct = 0
-        mum_samples = 0
-        self.eval()
+    def monitor_metrics(self, outputs, targets):
+        if targets is None:
+            return {}
+        outputs = ptu.to_numpy(torch.argmax(outputs, dim=1))
+        targets = ptu.to_numpy(targets)
+        accuracy = metrics.accuracy_score(targets, outputs)
+        return {"acc": accuracy}
 
-        with torch.no_grad():
-            for x, y in loader:
-                x = x.to(device=self.device)
-                y = y.to(device=self.device)
 
-                scores, _ = self(x, y)
-                # 64x10
-                _, preds = scores.max(1)
-                num_correct += torch.sum((preds == y), -1)
-                mum_samples += preds.size(0)
-            accuracy = float(num_correct) / float(mum_samples)
-            print(f"Got {num_correct} / {mum_samples} with accuracy: {accuracy * 100: .2f}%")
-        self.train()
-        return accuracy
+##################################################################################################
+def plot_losses(history):
+    train_losses = [x.get('train_loss') for x in history]
+    val_losses = [x['val_loss'] for x in history]
+    plt.plot(train_losses, '-bx')
+    plt.plot(val_losses, '-rx')
+    plt.xlabel('epoch')
+    plt.ylabel('loss')
+    plt.legend(['Training', 'Validation'])
+    plt.title('Loss vs. No. of epochs')
+    plt.show()
+
+
 ##################################################################################################
 
 
@@ -161,8 +162,9 @@ def main():
     # RUN TRAINING    #
     ###################
     print("###### PARAM ########")
-    params["train_batch_size"]= 64
-    params['fp16'] = False
+    params["max_epochs"]= 3
+    params["train_batch_size"] = 3000
+    params['fp16'] = True
     print(params)
 
     path = os.getcwd()
@@ -192,13 +194,24 @@ def main():
 
     m = MyModel(params)
     m.init_trainer(params)
-    m.fit(train_dataset=train_dataset, train_batch_size=params["train_batch_size"],
-          valid_dataset=test_dataset, valid_batch_size=params["valid_batch_size"],
-          max_epochs=params["max_epochs"], device=device,
-          num_workers=6, use_fp16=params['fp16'],
-          )
-    m.check_accuracy(m.train_loader)
-    m.check_accuracy(m.valid_loader)
+    history = m.fit(train_dataset=train_dataset, train_batch_size=params["train_batch_size"],
+                    valid_dataset=test_dataset, valid_batch_size=params["valid_batch_size"],
+                    max_epochs=params["max_epochs"], device=device,
+                    num_workers=-1, use_fp16=params['fp16'],
+                    )
+    print(len(history))
+    print(history.values())
+
+    train_losses = history['train_loss']
+    val_losses = history['val_loss']
+    plt.plot(train_losses, '-bx')
+    plt.plot(val_losses, '-rx')
+    plt.xlabel('epoch')
+    plt.ylabel('loss')
+    plt.legend(['Training', 'Validation'])
+    plt.title('Loss vs. No. of epochs')
+    plt.show()
+
 
 
 if __name__ == '__main__':
