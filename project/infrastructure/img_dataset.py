@@ -9,7 +9,7 @@ class ImageDataset(object):
     def __init__(
             self,
             image_paths, targets,
-            resize=None, augmentations=None,
+            augmentations=None,
             channel_first=True, grayscale=False
     ):
         """
@@ -20,8 +20,6 @@ class ImageDataset(object):
         """
         self.image_paths = image_paths
         self.targets = targets
-        # TODO: need to implement resize
-        self.resize = resize
         self.augmentations = augmentations
         self.channel_first = channel_first
         self.grayscale = grayscale
