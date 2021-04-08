@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 from project.infrastructure.model_trainer import Model
 import project.infrastructure.utils as utils
 
+
 class MyModel(Model):
     """ inherent from Model (subclass of nn.Module)"""
     def __init__(self, params: dict):
@@ -113,7 +114,7 @@ def main():
     parser.add_argument('--learning_rate', '-lr', type=float, default=5e-3)
 
     parser.add_argument(
-        '--max_epochs', '-n', type=int, default=3,
+        '--max_epochs', '-n', type=int, default=10,
         help='Number of epochs'
     )
     parser.add_argument(
@@ -160,6 +161,10 @@ def main():
     # RUN TRAINING    #
     ###################
     print("###### PARAM ########")
+    params["train_batch_size"]= 64
+    params['fp16'] = False
+    print(params)
+
     path = os.getcwd()
     print(f"Working Dir:{path}")
 
@@ -189,7 +194,8 @@ def main():
     m.init_trainer(params)
     m.fit(train_dataset=train_dataset, train_batch_size=params["train_batch_size"],
           valid_dataset=test_dataset, valid_batch_size=params["valid_batch_size"],
-          max_epochs=params["max_epochs"], device=device
+          max_epochs=params["max_epochs"], device=device,
+          num_workers=6, use_fp16=params['fp16'],
           )
     m.check_accuracy(m.train_loader)
     m.check_accuracy(m.valid_loader)
@@ -197,6 +203,7 @@ def main():
 
 if __name__ == '__main__':
     print(torch.__version__)
+    torch.backends.cudnn.benchmark = True
     start_time = utils.tic("###### Start Training ######")
     main()
     print("Done!")
