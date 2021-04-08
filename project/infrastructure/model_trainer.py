@@ -10,9 +10,35 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
+import psutil
 from tqdm import tqdm
 
 import project.infrastructure.pytorch_util as ptu
+
+
+class AverageMeter:
+    """
+    Computes and stores the average and current value
+    """
+
+    def __init__(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
 
 
 class Model(nn.Module, metaclass=abc.ABCMeta):
@@ -22,6 +48,14 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         super().__init__(*args, **kwargs)
 
         self.params = None
+
+        # Dataset
+        self.train_dataset = None
+        self.valid_dataset = None
+
+        # Sampler
+        self.train_sampler = None
+        self.valid_sampler = None
 
         # Data Loader
         self.train_loader = None
@@ -37,7 +71,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
         # GPU or CPU
         self.device = None
-
+        self.num_workers = None
         # Use automatic mixed precision training in GPU
         self.fp16 = False
         self.scaler = None
@@ -45,6 +79,8 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         # Timer
         self.start_time = None
         self.end_time = None
+
+    #######################################################
 
     def init_trainer(self, params: dict):
         """ Init"""
@@ -88,9 +124,22 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         """
         overwrite forward function to return different stuff
         """
-        super().forward(*args, **kwargs)
-        raise NotImplementedError
+        return super().forward(*args, **kwargs)
 
+    def model_fn(self, batch):
+        data, targets = batch
+        data = data.to(device=self.device)
+        targets = targets.to(device=self.device)
+
+        metrics = None
+        if self.fp16:
+            with torch.cuda.amp.autocast():
+                output, loss = self(data, targets)
+        else:
+            output, loss = self(data, targets)
+        return output, loss, metrics
+
+    #####################################################################
     def fit(
             self,
             train_dataset,
@@ -107,7 +156,9 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
     ):
         """ fit the model """
         self.fp16 = use_fp16
-
+        if num_workers == -1:
+            num_workers = psutil.cpu_count()
+        self.num_workers = num_workers
         if self.train_loader is None:
             self.train_loader = DataLoader(
                 dataset=train_dataset,
@@ -142,53 +193,80 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             self.scheduler = self.fetch_scheduler()
 
         self.start_time = time.time()
-        n_epochs_loop = tqdm(range(max_epochs), desc="XXX Learning", leave=False)
+        n_epochs_loop = tqdm(range(max_epochs), desc="LDC", leave=True)
         for epoch in n_epochs_loop:
             train_epoch_loss = self.train_one_epoch(self.train_loader)
 
             # update progress bar
-            n_epochs_loop.set_postfix(epoch_loss=train_epoch_loss.item())
+            DEVICE = 'AMP' if self.fp16 else 'cuda'
+            description = f'({DEVICE}) epoch {epoch} loss: {train_epoch_loss:.4f}'
+            n_epochs_loop.set_description(description)
         self.end_time = time.time() - self.start_time
 
-    def train_one_epoch(self, data_loader):
+    def train_one_epoch(self, train_loader):
         """ train_one_epoch """
         self.train()
-        epoch_loss = 0
-        for batch_idx, batch in enumerate(data_loader):
-            # batch is a tuple: (data, targets)
-            step_loss = self.train_one_step(batch)
-            epoch_loss += step_loss
-        return epoch_loss / (batch_idx + 1)
+        losses = AverageMeter()
+        metrics_meter = None
+
+        for batch_idx, train_batch in enumerate(train_loader):
+            # train_batch is a tuple: (data, targets)
+            loss, metrics = self.train_one_step(train_batch)
+            losses.update(loss.item(), train_loader.batch_size)
+
+            # if batch_idx == 0:
+            #     metrics_meter = {k: AverageMeter() for k in metrics}
+            #
+            # monitor = {}
+            # for m_m in metrics_meter:
+            #     metrics_meter[m_m].update(metrics[m_m], data_loader.batch_size)
+            #     monitor[m_m] = metrics_meter[m_m].avg
+            # self.current_train_step += 1
+            # tk0.set_postfix(loss=losses.avg, stage="train", **monitor)
+            # tk0.close()
+        return losses.avg
 
     def train_one_step(self, batch):
         """ take one gradient step """
         self.optimizer.zero_grad()
+        _, loss, metrics= self.model_fn(batch)
 
-        data, targets = batch
-        data = data.to(device=self.device)
-
-        targets = targets.to(device=self.device)
-        _, loss = self.forward(data, targets)
-
-        # use mix amp
-        if self.fp16 and torch.cuda.is_available():
-            assert self.scaler is not None, "amp.GradScaler() is not init"
-            with torch.cuda.amp.autocast():
+        with torch.set_grad_enabled(True):
+            # USE AUTOMATIC MIXED PRECISION
+            if self.fp16 and torch.cuda.is_available():
+                assert self.scaler is not None, "amp.GradScaler() is not init"
                 self.scaler.scale(loss).backward()
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
-        else:
-            loss.backward()
-            self.optimizer.step()
+            else:
+                loss.backward()
+                self.optimizer.step()
 
-        if self.scheduler:
-            self.scheduler.step()
-        return loss
+            if self.scheduler:
+                self.scheduler.step()
+        return loss, metrics
 
     def monitor_metrics(self, *args, **kwargs):
         """ show metrics"""
         return
 
+    def validate_one_step(self, data):
+        _, loss, metrics = self.model_fn(data)
+        return loss, metrics
+
+    def validate_one_epoch(self, data_loader):
+        self.eval()
+        losses = AverageMeter()
+        for batch_idx, batch in enumerate(data_loader):
+            with torch.no_grad():
+                loss, metrics = self.validate_one_step(batch)
+            losses.update(loss.item(), data_loader.batch_size)
+
+        return losses.avg
+
+    def predict_one_step(self, data):
+        output, _, _ = self.model_fn(data)
+        return output
 
 ###########################################
 
@@ -267,42 +345,3 @@ class MyModel(Model):
             print(f"Got {num_correct} / {mum_samples} with accuracy: {accuracy * 100: .2f}%")
         self.train()
         return accuracy
-
-
-if __name__ == '__main__':
-    # load data
-    train_dataset = datasets.MNIST(
-        root='../../data/',
-        train=True,
-        transform=transforms.ToTensor(),
-        download=True
-    )
-
-    test_dataset = datasets.MNIST(
-        root='../../data/',
-        train=False,
-        transform=transforms.ToTensor(),
-        download=True,
-    )
-
-    # Init GPU if available
-    device = torch.device('cpu')
-    if torch.cuda.is_available():
-        device = torch.device("cuda:0")
-    print(device)
-
-    params = {
-        "input_size": 1,
-        "output_size": 10,
-        "learning_rate": 1e-3,
-        "train_batch_size": 64,
-        "valid_batch_size": 128,
-        "max_epochs": 3,
-    }
-    m = MyModel(params)
-    m.fit(train_dataset=train_dataset, train_batch_size=params["train_batch_size"],
-          valid_dataset=test_dataset, valid_batch_size=params["valid_batch_size"],
-          max_epochs=params["max_epochs"], device=device
-          )
-    m.check_accuracy(m.train_loader)
-    m.check_accuracy(m.valid_loader)
