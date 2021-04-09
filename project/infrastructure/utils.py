@@ -1,9 +1,12 @@
 from typing import Tuple, List, Union, Optional
+import os
 import time
+import math
 
 import numpy as np
 import torch
-import math
+import cv2
+import matplotlib.pyplot as plt
 
 
 ############################################
@@ -52,4 +55,31 @@ def im_show(img: torch.Tensor):
     # img = img / 2 + 0.5  # unnormalize
     np_img = img.numpy()
     plt.imshow(np.transpose(np_img, (1, 2, 0)))
+    plt.show()
+
+
+def display_image_grid(images_filepaths=None, images_array_lst=None, predicted_labels=(), cols=5):
+
+    if images_filepaths is not None:
+        rows = len(images_filepaths) // cols
+    else:
+        rows = len(images_array_lst) // cols
+
+    figure, ax = plt.subplots(nrows=rows, ncols=cols, figsize=(12, 6))
+    if images_array_lst:
+        for i, img_array in enumerate(images_array_lst):
+            img_array = np.transpose(img_array.numpy(), (1, 2, 0))
+
+            ax.ravel()[i].imshow(img_array.astype('uint8'))
+    else:
+        for i, image_filepath in enumerate(images_filepaths):
+            image = cv2.imread(image_filepath)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            true_label = os.path.normpath(image_filepath).split(os.sep)[-2]
+            predicted_label = predicted_labels[i] if predicted_labels else true_label
+            color = "green" if true_label == predicted_label else "red"
+            ax.ravel()[i].imshow(image)
+            ax.ravel()[i].set_title(predicted_label, color=color)
+            ax.ravel()[i].set_axis_off()
+    plt.tight_layout()
     plt.show()
