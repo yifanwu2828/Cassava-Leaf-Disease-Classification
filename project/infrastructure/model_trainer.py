@@ -4,7 +4,6 @@ from typing import Tuple, List, Dict, Union, Optional, Any
 import time
 
 import numpy as np
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import psutil
@@ -120,7 +119,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         output: torch.FloatTensor
         loss: torch.FloatTensor
         metrics: dict = {}
-        target: torch.Tensor = None
+        target: Optional[torch.Tensor] = None
 
         # TODO: fix the param to forward
         # if batch is a dictionary
@@ -228,10 +227,11 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
         history: Dict[str, List] = defaultdict(list)
         self.start_time: float = time.time()
-        n_epochs_loop = tqdm(range(max_epochs), desc="LDC", leave=True)
+        n_epochs_loop = tqdm(range(max_epochs), desc="LDD", leave=True)
         for _ in n_epochs_loop:
             train_loss: Union[torch.FloatTensor, np.ndarray]
             val_loss: Union[torch.FloatTensor, np.ndarray, dict]
+            val_metrics: dict
 
             # Training Phase
             train_loss, _ = self.train_one_epoch(self.train_loader)
@@ -248,8 +248,8 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                     val_metrics[k]= np.mean(v)
                     history[k].append(v)
             else:
-                val_loss = {}
-                val_metrics = {}
+                val_loss: dict = {}
+                val_metrics: dict = {}
 
             # update progress bar
             description: str = f'({DEVICE}) epoch: {self.current_epoch}'
@@ -326,7 +326,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         _, loss, metrics = self.model_fn(data)
         return loss, metrics
 
-    def validate_one_epoch(self, valid_loader):
+    def validate_one_epoch(self, valid_loader) -> Tuple[List, Dict]:
         self.eval()
         metrics: dict
         val_losses: List = []
@@ -344,6 +344,6 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             self.current_valid_step += 1
         return val_losses, val_metrics
 
-    def predict_one_step(self, data):
+    def predict_one_step(self, data) -> torch.FloatTensor:
         output, _, _ = self.model_fn(data)
         return output
