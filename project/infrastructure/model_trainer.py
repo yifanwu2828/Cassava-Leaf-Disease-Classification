@@ -81,6 +81,9 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         self.metrics = {"train": {}, "valid": {}, "test": {}}
 
     #######################################################
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}"
+    #######################################################
 
     def init_trainer(self, params: dict):
         """ Init Trainer"""
