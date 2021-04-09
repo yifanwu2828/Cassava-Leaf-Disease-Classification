@@ -156,9 +156,10 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                 output, loss = self(data, targets)
 
         # Record metrics if has target
-        if target is not None:
-            metrics = self.monitor_metrics(output, targets)
 
+        metrics = self.monitor_metrics(output, targets)
+
+        print(metrics)
         return output, loss, metrics
 
     #####################################################################
