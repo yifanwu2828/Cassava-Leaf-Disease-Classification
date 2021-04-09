@@ -2,6 +2,7 @@ import argparse
 import sys
 import os
 import time
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -45,7 +46,7 @@ class MyModel(Model):
         )
         self.fc1 = nn.Linear(16 * 7 * 7, params["output_size"])
 
-    def fetch_optimizer(self):
+    def config_optimizer(self):
         """set optimizer"""
         opt = optim.Adam(self.parameters(), lr=self.params["learning_rate"])
         return opt
@@ -58,7 +59,7 @@ class MyModel(Model):
             return None
         return criterion(outputs, targets)
 
-    def forward(self, x, targets=None):
+    def forward(self, x, targets=None)-> Tuple[torch.FloatTensor, torch.FloatTensor]:
         """
         forward function return logits and loss
         """
@@ -67,21 +68,21 @@ class MyModel(Model):
         x = F.relu(self.conv2(x))
         x = self.pool(x)
         x = x.reshape(x.shape[0], -1)
-        out = self.fc1(x)
+        out: torch.FloatTensor = self.fc1(x)
 
         criterion = nn.CrossEntropyLoss()
-        loss = self.loss_fn(out, targets, criterion)
+        loss: torch.FloatTensor = self.loss_fn(out, targets, criterion)
 
         return out, loss
 
-    def monitor_metrics(self, outputs, targets):
+    def monitor_metrics(self, outputs, targets) -> dict:
         if targets is None:
             return {}
-        outputs = ptu.to_numpy(torch.argmax(outputs, dim=1))
-        targets = ptu.to_numpy(targets)
+        outputs: np.ndarray = ptu.to_numpy(torch.argmax(outputs, dim=1))
+        targets: np.ndarray = ptu.to_numpy(targets)
         accuracy = metrics.accuracy_score(targets, outputs)
         val_metrics = {
-            "accuracy": accuracy,
+            "acc": accuracy,
             # "nll": Loss(criterion)
         }
         return val_metrics
