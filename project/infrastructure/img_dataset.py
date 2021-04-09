@@ -8,9 +8,11 @@ class ImageDataset(object):
     """ Image Dataset """
     def __init__(
             self,
-            image_paths, targets,
+            image_paths,
+            targets,
             augmentations=None,
-            channel_first=True, grayscale=False
+            channel_first=True,
+            grayscale=False
     ):
         """
         :param image_paths: list of paths to images
