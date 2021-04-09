@@ -119,7 +119,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         output: torch.FloatTensor
         loss: torch.FloatTensor
         metrics: dict = {}
-        target: Optional[torch.Tensor] = None
+        targets: Optional[torch.Tensor] = None
 
         # TODO: fix the param to forward
         # if batch is a dictionary
@@ -156,10 +156,9 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                 output, loss = self(data, targets)
 
         # Record metrics if has target
+        if targets is not None:
+            metrics = self.monitor_metrics(output, targets)
 
-        metrics = self.monitor_metrics(output, targets)
-
-        print(metrics)
         return output, loss, metrics
 
     #####################################################################
