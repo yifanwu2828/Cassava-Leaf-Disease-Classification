@@ -12,30 +12,6 @@ from tqdm import tqdm
 import project.infrastructure.pytorch_util as ptu
 
 
-class AverageMeter:
-    """
-    Computes and stores the average and current value
-    """
-
-    def __init__(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
-
-
 class Model(nn.Module, metaclass=abc.ABCMeta):
     """ simple model trainer """
 
@@ -264,7 +240,19 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         loss: torch.FloatTensor
         metrics: dict
 
-        self.optimizer.zero_grad()
+        '''
+        The second code snippet does not zero the memory of each individual parameter
+        also the subsequent backward pass uses assignment instead of addition to store gradients,
+        this reduces the number of memory operations.
+        Setting gradient to None has a slightly different numerical behavior than setting it to zero
+        '''
+        # 1st most comment way: set grad to zero grad
+        # self.optimizer.zero_grad()
+
+        # 2nd faster way: set grad to None
+        for param in self.parameters():
+            param.grad = None
+
         _, loss, metrics = self.model_fn(batch)
 
         with torch.set_grad_enabled(True):
