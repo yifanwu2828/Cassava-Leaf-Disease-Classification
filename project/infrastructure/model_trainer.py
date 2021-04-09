@@ -219,7 +219,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             self.scheduler: Optional[Any] = self.config_scheduler()
 
         # device indicator for progress bar
-        DEVICE: str
+        global DEVICE
         if torch.cuda.is_available():
             DEVICE = 'AMP' if self.fp16 else 'cuda'
         else:
@@ -252,7 +252,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                 val_metrics: dict = {}
 
             # update progress bar
-            description: str = f'({DEVICE}) epoch: {self.current_epoch}'
+            description: str = f'({DEVICE}) Epoch: {self.current_epoch}'
             n_epochs_loop.set_description(description)
             n_epochs_loop.set_postfix(
                 train_loss=train_loss,
@@ -266,6 +266,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
     def train_one_epoch(self, train_loader) -> Tuple[List, Optional[dict]]:
         """ train_one_epoch """
         self.train()
+        print('\nTrain One Epoch...')
         train_losses: List = []
         train_metrics: Optional[dict] = None
         # train_metrics = defaultdict(list)
@@ -274,11 +275,11 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         tk0 = train_loader
         for batch_idx, train_batch in enumerate(tk0):
             # train_batch is a tuple: (data, targets)
-            loss, metrics = self.train_one_step(train_batch)
+            loss, train_metrics = self.train_one_step(train_batch)
             train_losses.append(ptu.to_numpy(loss))
             # for k, v in metrics.items():
             #     train_metrics[k].append(v)
-            # self.current_train_step += 1
+            self.current_train_step += 1
         return train_losses, train_metrics
 
     def train_one_step(self, batch) -> Tuple[torch.FloatTensor, Dict]:
@@ -332,7 +333,6 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         val_losses: List = []
         val_metrics: Dict[str, list] = defaultdict(list)
 
-        # tk0 = valid_loader
         # tk0 = tqdm(valid_loader, total=len(valid_loader))
         tk0 = valid_loader
         for batch_idx, batch in enumerate(tk0):
