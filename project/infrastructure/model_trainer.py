@@ -6,11 +6,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-from torch.utils.data import DataLoader
-import torchvision.datasets as datasets
-import torchvision.transforms as transforms
 import psutil
 from tqdm import tqdm
 
@@ -45,7 +40,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
     """ simple model trainer """
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__()
 
         # Param Dict
         self.params = None
@@ -125,6 +120,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         """
         return
 
+    @abc.abstractmethod
     def forward(self, *args, **kwargs):
         """
         overwrite forward function to return different stuff
@@ -168,7 +164,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         pin_memory = True if torch.cuda.is_available() else False
 
         if self.train_loader is None:
-            self.train_loader = DataLoader(
+            self.train_loader = torch.utils.data.DataLoader(
                 dataset=train_dataset,
                 batch_size=train_batch_size,
                 shuffle=shuffle,
@@ -180,7 +176,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             )
 
         if self.valid_loader is None and valid_dataset is not None:
-            self.valid_loader = DataLoader(
+            self.valid_loader = torch.utils.data.DataLoader(
                 dataset=valid_dataset,
                 batch_size=valid_batch_size,
                 shuffle=False,  # not going to shuffle data for validation
@@ -262,7 +258,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
     def train_one_step(self, batch):
         """ take one gradient step """
-        loss: torch.Tensor
+        loss: torch.FloatTensor
         metrics: dict
 
         self.optimizer.zero_grad()
@@ -294,12 +290,13 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
     def validate_one_epoch(self, valid_loader):
         self.eval()
+        metrics: dict
         val_losses = []
         val_metrics = defaultdict(list)
 
         # tk0 = valid_loader
         # tk0 = tqdm(valid_loader, total=len(valid_loader))
-        tk0 =  valid_loader
+        tk0 = valid_loader
         for batch_idx, batch in enumerate(tk0):
             with torch.no_grad():
                 loss, metrics = self.validate_one_step(batch)

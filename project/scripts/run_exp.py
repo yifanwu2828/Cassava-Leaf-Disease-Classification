@@ -51,7 +51,7 @@ class MyModel(Model):
         return opt
 
     @staticmethod
-    def calc_loss(outputs, targets, criterion=None):
+    def loss_fn(outputs, targets, criterion=None):
         """ calculate loss """
         if targets is None or criterion is None:
             print("Targets is None or Criterion is None")
@@ -70,7 +70,7 @@ class MyModel(Model):
         out = self.fc1(x)
 
         criterion = nn.CrossEntropyLoss()
-        loss = self.calc_loss(out, targets, criterion)
+        loss = self.loss_fn(out, targets, criterion)
 
         return out, loss
 
@@ -80,7 +80,11 @@ class MyModel(Model):
         outputs = ptu.to_numpy(torch.argmax(outputs, dim=1))
         targets = ptu.to_numpy(targets)
         accuracy = metrics.accuracy_score(targets, outputs)
-        return {"acc": accuracy}
+        val_metrics = {
+            "accuracy": accuracy,
+            # "nll": Loss(criterion)
+        }
+        return val_metrics
 
 
 ##################################################################################################
@@ -162,8 +166,8 @@ def main():
     # RUN TRAINING    #
     ###################
     print("###### PARAM ########")
-    params["max_epochs"]= 3
-    params["train_batch_size"] = 3000
+    params["max_epochs"]= 10
+    params["train_batch_size"] = 1000
     params['fp16'] = True
     print(params)
 
@@ -199,13 +203,10 @@ def main():
                     max_epochs=params["max_epochs"], device=device,
                     num_workers=-1, use_fp16=params['fp16'],
                     )
-    print(len(history))
-    print(history.values())
-
     train_losses = history['train_loss']
     val_losses = history['val_loss']
-    plt.plot(train_losses, '-bx')
-    plt.plot(val_losses, '-rx')
+    plt.plot(train_losses, '-x')
+    plt.plot(val_losses, '-x')
     plt.xlabel('epoch')
     plt.ylabel('loss')
     plt.legend(['Training', 'Validation'])
