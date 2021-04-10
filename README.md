@@ -56,6 +56,6 @@ Thanks to the following people who have contributed to this project:
 TODO...
 
 ## Sources
-[](https://www.kaggle.com/c/cassava-leaf-disease-classification)
+[Dataset](https://www.kaggle.com/c/cassava-leaf-disease-classification)
 [Albumentations](https://github.com/albumentations-team/albumentations#i-am-new-to-image-augmentation)
 [Imbalanced Dataset Sampler](https://github.com/ufoym/imbalanced-dataset-sampler)
