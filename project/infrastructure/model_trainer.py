@@ -277,7 +277,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                         }, PATH
                     )
             else:
-                val_epoch_loss: dict = {}
+                avg_val_epoch_loss: dict = {}
                 val_metrics: dict = {}
 
             # update progress bar
@@ -292,7 +292,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
         self.end_time: float = time.time() - self.start_time
         if best_model_wts is None:
-            print("est_model_wts is None")
+            print("WARNING: Best_model_wts is None!!")
         return history, best_model_wts
 
     def train_one_epoch(self, train_loader) -> Tuple[List, Optional[dict]]:
