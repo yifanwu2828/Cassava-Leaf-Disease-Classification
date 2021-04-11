@@ -299,7 +299,8 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         """ train_one_epoch """
         assert self.phase == 'train', "self.phase is not 'train' in training one epoch"
         self.train()
-        print('\nTrain One Epoch...')
+        # print('\nTrain One Epoch...')
+
         train_losses: List = []
         train_metrics: Optional[dict] = None
         # train_metrics = defaultdict(list)
