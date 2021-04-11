@@ -2,13 +2,14 @@ from typing import List, Dict, Tuple, Optional, Union
 
 import numpy as np
 import torch
+from torch.utils.data import Dataset
 import cv2
 from sklearn import preprocessing
 
 
 
 
-class ImageDataset(torch.utils.data.Dataset):
+class ImageDataset(Dataset):
     """ Image Dataset """
     def __init__(
             self,

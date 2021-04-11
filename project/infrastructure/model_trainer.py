@@ -6,6 +6,7 @@ import time
 import numpy as np
 import torch
 import torch.nn as nn
+from torch.utils.data import Dataset, Sampler, DataLoader
 import psutil
 from tqdm import tqdm
 
@@ -22,16 +23,16 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         self.params: Optional[dict] = None
 
         # Dataset
-        self.train_dataset: Union[torch.utils.data.Dataset, Any] = None
-        self.valid_dataset: Union[torch.utils.data.Dataset, Any] = None
+        self.train_dataset: Union[Dataset, Any] = None
+        self.valid_dataset: Union[Dataset, Any] = None
 
         # Sampler
-        self.train_sampler: Optional[torch.utils.data.Sampler] = None
-        self.valid_sampler: Optional[torch.utils.data.Sampler] = None
+        self.train_sampler: Optional[Sampler] = None
+        self.valid_sampler: Optional[Sampler] = None
 
         # Data Loader
-        self.train_loader: torch.utils.data.DataLoader = None
-        self.valid_loader: torch.utils.data.DataLoader = None
+        self.train_loader: DataLoader = None
+        self.valid_loader: DataLoader = None
 
         # Optimizer
         self.optimizer = None
@@ -170,8 +171,8 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             valid_batch_size: int,
             max_epochs: int,
             device: torch.device,
-            train_sampler: Optional[torch.utils.data.Sampler] = None,
-            valid_sampler: Optional[torch.utils.data.Sampler] = None,
+            train_sampler: Optional[Sampler] = None,
+            valid_sampler: Optional[Sampler] = None,
             shuffle: bool = True,
             num_workers: int = 4,
             use_fp16: bool = False
@@ -184,7 +185,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         pin_memory: bool = True if torch.cuda.is_available() else False
 
         if self.train_loader is None:
-            self.train_loader = torch.utils.data.DataLoader(
+            self.train_loader = DataLoader(
                 dataset=train_dataset,
                 batch_size=train_batch_size,
                 shuffle=shuffle,
@@ -196,7 +197,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             )
 
         if self.valid_loader is None and valid_dataset is not None:
-            self.valid_loader = torch.utils.data.DataLoader(
+            self.valid_loader = DataLoader(
                 dataset=valid_dataset,
                 batch_size=valid_batch_size,
                 shuffle=False,  # not going to shuffle data for validation
