@@ -246,13 +246,15 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             # Training Phase
             self.phase = 'train'
             train_epoch_loss, _ = self.train_one_epoch(self.train_loader)
-            history["train_loss"].append(np.mean(train_epoch_loss))
+            avg_train_epoch_loss = np.mean(train_epoch_loss)
+            history["train_loss"].append(avg_train_epoch_loss)
 
             # Validation phase
             self.phase = 'eval'
             if self.valid_loader:
                 val_epoch_loss, val_metrics = self.validate_one_epoch(self.valid_loader)
-                history["val_loss"].append(np.mean(val_epoch_loss))
+                avg_val_epoch_loss = np.mean(val_epoch_loss)
+                history["val_loss"].append(avg_val_epoch_loss)
 
                 for k, v in val_metrics.items():
                     val_metrics[k]= np.mean(v)
@@ -282,8 +284,8 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             description: str = f'({DEVICE}) Epoch: {self.current_epoch}'
             n_epochs_loop.set_description(description)
             n_epochs_loop.set_postfix(
-                train_loss=train_epoch_loss,
-                val_loss=val_epoch_loss,
+                train_loss=avg_train_epoch_loss,
+                val_loss=avg_val_epoch_loss,
                 **val_metrics
             )
             self.current_epoch += 1
