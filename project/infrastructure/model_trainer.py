@@ -2,6 +2,7 @@ import abc
 from collections import defaultdict
 from typing import Tuple, List, Dict, Union, Optional, Any
 import time
+import copy
 
 import numpy as np
 import torch
@@ -50,6 +51,9 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         # Use automatic mixed precision training in GPU
         self.fp16: bool = False
         self.scaler: torch.cuda.amp.GradScaler = None
+
+        # Phase
+        self.phase: str = ''
 
         # Timer
         self.start_time: float = None
@@ -122,7 +126,6 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         metrics: dict = {}
         targets: Optional[torch.Tensor] = None
 
-        # TODO: fix the param to forward
         # if batch is a dictionary
         if isinstance(batch, dict):
             # adjust for different name assign for keys
@@ -175,7 +178,8 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             valid_sampler: Optional[Sampler] = None,
             shuffle: bool = True,
             num_workers: int = 4,
-            use_fp16: bool = False
+            use_fp16: bool = False,
+            save_best: bool = False,
     ):
         """ fit the model """
         self.fp16: int = use_fp16
@@ -226,46 +230,72 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         else:
             DEVICE = 'cpu'
 
+        # Used for saving best model
         history: Dict[str, List] = defaultdict(list)
+        best_model_wts = None
+        best_acc = 0.0
+
         self.start_time: float = time.time()
-        n_epochs_loop = tqdm(range(max_epochs), desc="LDD", leave=True)
-        for _ in n_epochs_loop:
-            train_loss: Union[torch.FloatTensor, np.ndarray]
-            val_loss: Union[torch.FloatTensor, np.ndarray, dict]
+        n_epochs_loop = tqdm(range(max_epochs), desc="LDC", leave=True)
+        for itr in n_epochs_loop:
+            # Each epoch has a training and validation phase
+            train_epoch_loss: Union[torch.FloatTensor, np.ndarray]
+            val_epoch_loss: Union[torch.FloatTensor, np.ndarray, dict]
             val_metrics: dict
 
             # Training Phase
-            train_loss, _ = self.train_one_epoch(self.train_loader)
-            train_loss: np.ndarray = np.mean(train_loss)
-            history["train_loss"].append(train_loss)
+            self.phase = 'train'
+            train_epoch_loss, _ = self.train_one_epoch(self.train_loader)
+            history["train_loss"].append(np.mean(train_epoch_loss))
 
             # Validation phase
+            self.phase = 'eval'
             if self.valid_loader:
-                val_loss, val_metrics = self.validate_one_epoch(self.valid_loader)
-                val_loss: np.ndarray = np.mean(val_loss)
-                history["val_loss"].append(val_loss)
+                val_epoch_loss, val_metrics = self.validate_one_epoch(self.valid_loader)
+                history["val_loss"].append(np.mean(val_epoch_loss))
 
                 for k, v in val_metrics.items():
                     val_metrics[k]= np.mean(v)
                     history[k].append(v)
+
+                # deep copy the model
+                if save_best and val_metrics["acc"] is not None:
+                    assert val_metrics["acc"].size == 1, "Compare multiply array value with float is ambiguous"
+                    epoch_acc = float(val_metrics["acc"])
+                    if epoch_acc > best_acc:
+                        best_acc = epoch_acc
+                        best_model_wts = copy.deepcopy(self.state_dict())
+                    # Save best model
+                    PATH = f"../model/test_ldc_{itr}.pth"
+                    torch.save(
+                        {
+                            'epoch': itr,
+                            'model_state_dict': best_model_wts,
+                            'acc': epoch_acc,
+                        }, PATH
+                    )
             else:
-                val_loss: dict = {}
+                val_epoch_loss: dict = {}
                 val_metrics: dict = {}
 
             # update progress bar
             description: str = f'({DEVICE}) Epoch: {self.current_epoch}'
             n_epochs_loop.set_description(description)
             n_epochs_loop.set_postfix(
-                train_loss=train_loss,
-                val_loss=val_loss,
+                train_loss=train_epoch_loss,
+                val_loss=val_epoch_loss,
                 **val_metrics
             )
             self.current_epoch += 1
+
         self.end_time: float = time.time() - self.start_time
-        return history
+        if best_model_wts is None:
+            print("est_model_wts is None")
+        return history, best_model_wts
 
     def train_one_epoch(self, train_loader) -> Tuple[List, Optional[dict]]:
         """ train_one_epoch """
+        assert self.phase == 'train', "self.phase is not 'train' in training one epoch"
         self.train()
         print('\nTrain One Epoch...')
         train_losses: List = []
@@ -304,6 +334,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         _, loss, metrics = self.model_fn(batch)
 
         with torch.set_grad_enabled(True):
+            assert self.phase == 'train'
             # USE AUTOMATIC MIXED PRECISION
             if self.fp16 and torch.cuda.is_available():
                 assert self.scaler is not None, "torch.cuda.amp.GradScaler is not init"
@@ -329,7 +360,9 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         return loss, metrics
 
     def validate_one_epoch(self, valid_loader) -> Tuple[List, Dict]:
+        assert self.phase == 'eval', "self.phase is not 'eval' in training one epoch"
         self.eval()
+
         metrics: dict
         val_losses: List = []
         val_metrics: Dict[str, list] = defaultdict(list)
