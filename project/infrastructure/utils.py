@@ -47,7 +47,7 @@ def calc_n_out(n_in: int, k: int, s: int, p: int):
     return math.floor((n_in + 2*p - k) / s) + 1
 
 
-def im_show(img: torch.Tensor):
+def im_show(img: torch.Tensor, title=None):
     """
     show image use matplotlib
     """
@@ -55,6 +55,10 @@ def im_show(img: torch.Tensor):
     # img = img / 2 + 0.5  # unnormalize
     np_img = img.numpy()
     plt.imshow(np.transpose(np_img, (1, 2, 0)))
+    if title is not None:
+        plt.title(title)
+    plt.pause(0.001)  # pause a bit so that plots are updated
+
     plt.show()
 
 
