@@ -26,25 +26,41 @@ This project is simple Lorem ipsum dolor generator.
 - [x] Implement resnet example
 - [ ] Implement more NN Acrh example
 - [x] Add visualization for learned reward during training
+- [ ] Add Optuna to automate hyperparameter search
 - [ ] Check tensorboard video logger for visualization
-- [ ] Add requirements.txt
+- [x] Add requirements.txt (need update)
 - [ ] Clear TODOs in code 
 
 ## Prerequisites
 Before you continue, ensure you have met the following requirements:
 
-* You have installed the version of`<coding_language/dependency/requirement_1>` 
-```
-python >= 3.6
-...
-```
+* You have installed the version of`<python >= 3.6>` 
+
 * You are using a `<Linux/MacOS>` machine. Windows is not currently recommended.
 
 ## Setup
-To run this project, install it locally using pip
+To run this project, there are two options:
+
+(Recommended) Install with conda:
+
+1. Install conda, if you don't already have it, by following the instructions at [Link to Conda environment setup](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html)
 
 ```
-pip instal -r requirements.txt
+This install will modify the `PATH` variable in your bashrc.
+You need to open a new terminal for that path change to take place (to be able to find 'conda' in the next step).
+```
+2. Create a conda environment that will contain python 3:
+```
+conda create -n `<env_name>` python=3.6
+```
+3. activate the environment (do this every time you open a new terminal and want to run code):
+```
+conda activate `<env_name>`
+```
+
+4. Install the requirements into this conda environment
+```
+pip install --user -r requirements.txt
 ```
 
 ## Usage
@@ -61,3 +77,5 @@ TODO...
 [Albumentations](https://github.com/albumentations-team/albumentations#i-am-new-to-image-augmentation)
 
 [Imbalanced Dataset Sampler](https://github.com/ufoym/imbalanced-dataset-sampler)
+
+[Optuna](https://optuna.org/)
