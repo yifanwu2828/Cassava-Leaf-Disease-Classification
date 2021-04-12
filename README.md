@@ -25,6 +25,7 @@ This project is simple Lorem ipsum dolor generator.
 - [x] Implement trainer
 - [x] Implement resnet example
 - [ ] Implement more NN Acrh example
+- [ ] Deal with ImbalancedDataset
 - [x] Add visualization for learned reward during training
 - [ ] Add Optuna to automate hyperparameter search
 - [ ] Check tensorboard video logger for visualization
