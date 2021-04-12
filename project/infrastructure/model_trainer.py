@@ -40,6 +40,9 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         self.optimizer = None
         self.scheduler: Optional[Any] = None
 
+        # loss function
+        self.criterion = None
+
         # history record
         self.current_epoch: int = 0
         self.current_train_step: int = 0
@@ -94,6 +97,19 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
         print(f"############ {self.device}: AMP={self.fp16} ############")
 
+        try:
+            self.optimizer = params["optimizer"]
+        except KeyError:
+            pass
+        try:
+            self.scheduler = params["scheduler"]
+        except KeyError:
+            pass
+        try:
+            self.criterion = params["criterion"]
+        except KeyError:
+            pass
+
     #######################################################
 
     @abc.abstractmethod
@@ -103,12 +119,19 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         """
         return
 
-    def config_scheduler(self, *args, **kwargs):
+    def config_scheduler(self, *args, **kwargs) -> Optional[Any]:
         """
         overwrite it if use LR scheduler
         """
-        assert self.optimizer is not None, "Please set up optimizer first"
         return
+
+    def config_criterion(self, *args, **kwargs):
+        """
+        must overwrite define optimizer
+        """
+        return
+
+
 
     @abc.abstractmethod
     def forward(self, *args, **kwargs):
@@ -151,16 +174,27 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         # amp
         if self.fp16:
             with torch.cuda.amp.autocast():
-                output, loss = self(data, targets)
+                output = self(data)
+                loss = self.loss_fn(output, targets)
         # cuda or cpu
         else:
-            output, loss = self(data, targets)
+            output = self(data)
+            loss = self.loss_fn(output, targets)
 
         # Record metrics if has target
         if targets is not None:
             metrics = self.monitor_metrics(output, targets)
 
         return output, loss, metrics
+
+    def loss_fn(self, *args, **kwargs):
+        """ calculate loss """
+        # can overwrite this function to computer a much complex loss function
+        # if targets is None or self.criterion is None:
+        #     print("Targets is None or Criterion is None")
+        #     return None
+        # return self.criterion(outputs, targets)
+        return
 
     #####################################################################
     def fit(
@@ -219,10 +253,12 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             except NotImplementedError:
                 raise NotImplementedError("Optimizer is not implemented")
 
-
         if self.scheduler is None:
             assert self.optimizer is not None, "Please set up optimizer first"
             self.scheduler: Optional[Any] = self.config_scheduler()
+
+        if self.criterion is None:
+            self.criterion = self.config_criterion()
 
         # device indicator for progress bar
         global DEVICE
