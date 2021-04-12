@@ -108,12 +108,12 @@ def set_device(device: Union[torch.device, int]) -> None:
 #####################################################
 #####################################################
 
-def from_numpy(*args, **kwargs) -> torch.Tensor:
+def from_numpy(*args, **kwargs) -> torch.FloatTensor:
     """ Convert numpy array to torch tensor  and send to device('cuda:0' or 'cpu') """
     return torch.from_numpy(*args, **kwargs).float().to(device)
 
 
-def to_numpy(tensor: torch.FloatTensor) -> np.ndarray:
+def to_numpy(tensor: Union[torch.FloatTensor, torch.Tensor]) -> np.ndarray:
     """ Convert torch tensor to numpy array and send to CPU """
     return tensor.to('cpu').detach().numpy()
 
