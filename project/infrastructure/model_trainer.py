@@ -66,6 +66,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
     #######################################################
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}"
+
     #######################################################
 
     def init_trainer(self, params: dict) -> None:
@@ -115,16 +116,15 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         """
         return super().forward(*args, **kwargs)
 
-    def model_fn(
-            self,
-            batch: Union[Tuple, Dict]
-    ) -> Tuple[torch.FloatTensor, torch.FloatTensor, Dict]:
+    def model_fn(self, batch: Union[Dict, List, Tuple]) -> Tuple[torch.FloatTensor, torch.FloatTensor, Dict]:
 
-        assert len(batch) == 1 or len(batch) == 2,  "batch should be a pair for supervised learning"
+        assert len(batch) == 1 or len(batch) == 2, "batch should be a pair for supervised learning"
+        data: torch.FloatTensor
+        targets: Optional[torch.Tensor] = None
         output: torch.FloatTensor
         loss: torch.FloatTensor
-        metrics: dict = {}
-        targets: Optional[torch.Tensor] = None
+        metrics: Optional[dict] = {}
+
 
         # if batch is a dictionary
         if isinstance(batch, dict):
@@ -137,27 +137,20 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             else:  # len(name) == 2
                 data = batch[name[0]].to(self.device, non_blocking=True)
                 targets = batch[name[1]].to(self.device, non_blocking=True)
-            # amp
-            if self.fp16:
-                with torch.cuda.amp.autocast():
-                    output, loss = self(data, targets)
-            # cuda or cpu
-            else:
-                output, loss = self(data, targets)
 
+        # batch is a List or Tuple
         else:
-            # batch is a List or Tuple
             data, targets = batch
             data = data.to(device=self.device, non_blocking=True)
             targets = targets.to(device=self.device, non_blocking=True)
 
-            # amp
-            if self.fp16:
-                with torch.cuda.amp.autocast():
-                    output, loss = self(data, targets)
-            # cuda or cpu
-            else:
+        # amp
+        if self.fp16:
+            with torch.cuda.amp.autocast():
                 output, loss = self(data, targets)
+        # cuda or cpu
+        else:
+            output, loss = self(data)
 
         # Record metrics if has target
         if targets is not None:
@@ -257,7 +250,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                 history["val_loss"].append(avg_val_epoch_loss)
 
                 for k, v in val_metrics.items():
-                    val_metrics[k]= np.mean(v)
+                    val_metrics[k] = np.mean(v)
                     history[k].append(v)
 
                 # deep copy the model
