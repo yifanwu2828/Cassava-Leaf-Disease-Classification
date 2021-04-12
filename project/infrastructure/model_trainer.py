@@ -3,6 +3,7 @@ from collections import defaultdict
 from typing import Tuple, List, Dict, Union, Optional, Any
 import time
 import copy
+import warnings
 
 import numpy as np
 import torch
@@ -139,10 +140,13 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                 targets = batch[name[1]].to(self.device, non_blocking=True)
 
         # batch is a List or Tuple
-        else:
+        elif isinstance(batch, tuple) or isinstance(batch, list):
             data, targets = batch
             data = data.to(device=self.device, non_blocking=True)
             targets = targets.to(device=self.device, non_blocking=True)
+
+        else:
+            raise TypeError
 
         # amp
         if self.fp16:
@@ -150,7 +154,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                 output, loss = self(data, targets)
         # cuda or cpu
         else:
-            output, loss = self(data)
+            output, loss = self(data, targets)
 
         # Record metrics if has target
         if targets is not None:
@@ -210,7 +214,11 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             self.to(device)
 
         if self.optimizer is None:
-            self.optimizer = self.config_optimizer()
+            try:
+                self.optimizer = self.config_optimizer()
+            except NotImplementedError:
+                raise NotImplementedError("Optimizer is not implemented")
+
 
         if self.scheduler is None:
             assert self.optimizer is not None, "Please set up optimizer first"
@@ -285,7 +293,8 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
         self.end_time: float = time.time() - self.start_time
         if best_model_wts is None:
-            print("WARNING: Best_model_wts is None!!")
+            message = f"WARNING: Best_model_wts is None!!"
+            warnings.warn(message, UserWarning, stacklevel=2)
         return history, best_model_wts
 
     def train_one_epoch(self, train_loader) -> Tuple[List, Optional[dict]]:
