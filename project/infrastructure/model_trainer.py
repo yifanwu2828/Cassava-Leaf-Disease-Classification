@@ -268,7 +268,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                         best_acc = epoch_acc
                         best_model_wts = copy.deepcopy(self.state_dict())
                     # Save best model
-                    PATH = f"../model/test_ldc_{itr}.pth"
+                    PATH = f"../model/test_ldc.pth"
                     torch.save(
                         {
                             'epoch': itr,
