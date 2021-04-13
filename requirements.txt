@@ -10,3 +10,5 @@ torchaudio~=0.7.2
 torchsummary~=1.5.1
 torchvision~=0.8.2
 optuna==2.7.0
+tensorboard==2.4.1
+tensorboard-plugin-wit==1.8.0
