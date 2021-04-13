@@ -15,7 +15,7 @@ class Logger(object):
     Tensorboard Logger
     Before going further, more details on TensorBoard can be found at https://www.tensorflow.org/tensorboard/
     """
-    def __init__(self, log_dir: str, n_logged_samples: int = 10, summary_writer=None):
+    def __init__(self, log_dir: str = '../logdir/', n_logged_samples: int = 10, summary_writer=None):
         self._log_dir = log_dir
         print('########################')
         print('logging outputs to ', log_dir)

@@ -3,16 +3,21 @@ from collections import defaultdict
 from typing import Tuple, List, Dict, Union, Optional, Any
 import time
 import copy
+import random
 import warnings
 
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, Sampler, DataLoader
+from torch.utils.tensorboard import SummaryWriter
 import psutil
 from tqdm import tqdm
 
 import project.infrastructure.pytorch_util as ptu
+import project.infrastructure.utils as utils
+from project.infrastructure.logger import Logger
+
 
 
 class Model(nn.Module, metaclass=abc.ABCMeta):
@@ -23,6 +28,8 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
         # Param Dict
         self.params: Optional[dict] = None
+        self.writer = None
+        self.exp_name = None
 
         # Dataset
         self.train_dataset: Union[Dataset, Any] = None
@@ -78,12 +85,14 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
     def init_trainer(self, params: dict) -> None:
         """ Init Trainer"""
         self.params: dict = params
+        # self.logger = Logger(self.params['logdir'])
+        log_dir = params['logdir'] if 'logdir' in params.keys() else '../../runs/'
+        self.exp_name = params['exp'] if 'exp' in params.keys() else 'my_experiment'
+        self.writer = SummaryWriter(log_dir=log_dir, comment=self.exp_name)
 
         # Set random seeds
-        seed: int = self.params['seed']
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
+        seed: int = self.params['seed'] if 'seed' in self.params.keys() else 42
+        utils.seed_all(seed)
 
         # init gpu
         self.params['use_gpu']: bool = not self.params['no_gpu']
@@ -291,6 +300,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         self.start_time: float = time.time()
         n_epochs_loop = tqdm(range(max_epochs), desc="LDC", leave=True)
         for itr in n_epochs_loop:
+
             # Each epoch has a training and validation phase
             train_epoch_loss: Union[torch.FloatTensor, np.ndarray]
             val_epoch_loss: Union[torch.FloatTensor, np.ndarray, dict]
@@ -298,22 +308,34 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
             # Training Phase
             self.phase = 'train'
-            train_epoch_loss, _ = self.train_one_epoch(self.train_loader)
+            train_epoch_loss, _ = self.train_one_epoch(self.train_loader, epoch_index=itr)
             avg_train_epoch_loss = np.mean(train_epoch_loss)
+            # Record training loss
             history["train_loss"].append(avg_train_epoch_loss)
 
             # Validation phase
             self.phase = 'eval'
             if self.valid_loader:
-                val_epoch_loss, val_metrics = self.validate_one_epoch(self.valid_loader)
+                val_epoch_loss, val_metrics = self.validate_one_epoch(self.valid_loader, epoch_index=itr)
                 avg_val_epoch_loss = np.mean(val_epoch_loss)
                 history["val_loss"].append(avg_val_epoch_loss)
-
+                # Record Validation loss and metrics
                 for k, v in val_metrics.items():
                     val_metrics[k] = np.mean(v)
                     history[k].append(v)
 
-                # deep copy the model
+                # log Training and Validation loss to Tensorboard
+                self.writer.add_scalars(
+                    'Training vs. Validation Loss',
+                    {
+                        'Training': avg_train_epoch_loss,
+                        'Validation': avg_val_epoch_loss,
+                    }, self.current_epoch + 1
+                )
+                # Call this method to make sure that all pending events have been written to disk.
+                self.writer.flush()
+
+                # Deep copy the model for saving
                 if save_best and val_metrics["acc"] is not None:
                     assert val_metrics["acc"].size == 1, "Compare multiply array value with float is ambiguous"
                     epoch_acc = float(val_metrics["acc"])
@@ -344,12 +366,13 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             self.current_epoch += 1
 
         self.end_time: float = time.time() - self.start_time
+        self.writer.close()
         if best_model_wts is None:
             message = f"WARNING: Best_model_wts is None!!"
             warnings.warn(message, UserWarning, stacklevel=2)
         return history, best_model_wts
 
-    def train_one_epoch(self, train_loader) -> Tuple[List, Optional[dict]]:
+    def train_one_epoch(self, train_loader, epoch_index) -> Tuple[List, Optional[dict]]:
         """ train_one_epoch """
         assert self.phase == 'train', "self.phase is not 'train' in training one epoch"
         self.train()
@@ -358,15 +381,28 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         train_losses: List = []
         train_metrics: Optional[dict] = None
         # train_metrics = defaultdict(list)
+        running_loss = 0.0
 
         # tk0 = tqdm(train_loader, total=len(train_loader), leave=False)
         tk0 = train_loader
         for batch_idx, train_batch in enumerate(tk0):
             # train_batch is a tuple: (data, targets)
             loss, train_metrics = self.train_one_step(train_batch)
-            train_losses.append(ptu.to_numpy(loss))
+
+            # Record train loss and metrics
+            np_loss = ptu.to_numpy(loss)
+            train_losses.append(np_loss)
             # for k, v in metrics.items():
             #     train_metrics[k].append(v)
+
+            # Record loss to tensorboard
+            running_loss += float(np_loss)
+            if batch_idx % 1000 == 999:     # every 1000 mini-batches...
+                last_loss = running_loss / 1000
+                tb_x = epoch_index * len(train_loader) + batch_idx + 1
+                self.writer.add_scalar('Loss/train', last_loss, tb_x)
+                running_loss = 0.0
+
             self.current_train_step += 1
         return train_losses, train_metrics
 
@@ -385,10 +421,11 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         # self.optimizer.zero_grad()
 
         # 2nd faster way: set grad to None
-        # for param in self.parameters():
-        #     param.grad = None
-        # or maybe equivalently and concisely
-        self.optimizer.zero_grad(set_to_none=True)
+        for param in self.parameters():
+            param.grad = None
+
+        # or maybe equivalently and concisely (available in later Pytorch version)
+        # self.optimizer.zero_grad(set_to_none=True)
 
 
         _, loss, metrics = self.model_fn(batch)
@@ -430,7 +467,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         _, loss, metrics = self.model_fn(data)
         return loss, metrics
 
-    def validate_one_epoch(self, valid_loader) -> Tuple[List, Dict]:
+    def validate_one_epoch(self, valid_loader, epoch_index) -> Tuple[List, Dict]:
         assert self.phase == 'eval', "self.phase is not 'eval' in validate one epoch"
         self.eval()
 
@@ -438,14 +475,29 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         val_losses: List = []
         val_metrics: Dict[str, list] = defaultdict(list)
 
+        running_loss = 0.0
+
         # tk0 = tqdm(valid_loader, total=len(valid_loader))
         tk0 = valid_loader
         for batch_idx, batch in enumerate(tk0):
             with torch.no_grad():
+                # Calculate valid loss and metrics
                 loss, metrics = self.validate_one_step(batch)
-            val_losses.append(ptu.to_numpy(loss))
+            # record valid loss
+            np_loss = ptu.to_numpy(loss)
+            val_losses.append(np_loss)
+            # record valid metrics
             for k, v in metrics.items():
                 val_metrics[k].append(v)
+
+            # Record loss to tensorboard
+            running_loss += float(np_loss)   # len(np_loss) == 1
+            if batch_idx % 1000 == 999:  # every 1000 mini-batches...
+                last_loss = running_loss / 1000
+                tb_x = epoch_index * len(valid_loader) + batch_idx + 1
+                self.writer.add_scalar('Loss/test', last_loss, tb_x)
+                running_loss = 0.0
+
             self.current_valid_step += 1
         return val_losses, val_metrics
 
