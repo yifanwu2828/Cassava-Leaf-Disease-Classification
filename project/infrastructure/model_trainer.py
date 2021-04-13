@@ -326,7 +326,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
                 # log Training and Validation loss to Tensorboard
                 self.writer.add_scalars(
-                    'Training vs. Validation Loss',
+                    'Epoch_Loss',
                     {
                         'Training': avg_train_epoch_loss,
                         'Validation': avg_val_epoch_loss,
@@ -400,7 +400,8 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             if batch_idx % 1000 == 999:     # every 1000 mini-batches...
                 last_loss = running_loss / 1000
                 tb_x = epoch_index * len(train_loader) + batch_idx + 1
-                self.writer.add_scalar('Loss/train', last_loss, tb_x)
+                self.writer.add_scalar('batch_loss/train', last_loss, tb_x)
+                self.writer.flush()
                 running_loss = 0.0
 
             self.current_train_step += 1
@@ -495,7 +496,8 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             if batch_idx % 1000 == 999:  # every 1000 mini-batches...
                 last_loss = running_loss / 1000
                 tb_x = epoch_index * len(valid_loader) + batch_idx + 1
-                self.writer.add_scalar('Loss/test', last_loss, tb_x)
+                self.writer.add_scalar('batch_loss/test', last_loss, tb_x)
+                self.writer.flush()
                 running_loss = 0.0
 
             self.current_valid_step += 1
