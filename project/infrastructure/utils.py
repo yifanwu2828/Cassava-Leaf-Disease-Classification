@@ -62,8 +62,9 @@ def im_show(img: torch.Tensor, title=None):
     plt.show()
 
 
-def display_image_grid(images_filepaths=None, images_array_lst=None, predicted_labels=(), cols=5):
-
+def display_image_grid(images_filepaths=None, images_array_lst=None, predicted_labels=None, true_labels=None, cols=5):
+    title_label = ''
+    color = "yellow"
     if images_filepaths is not None:
         rows = len(images_filepaths) // cols
     else:
@@ -74,16 +75,43 @@ def display_image_grid(images_filepaths=None, images_array_lst=None, predicted_l
         for i, img_array in enumerate(images_array_lst):
             img_array = np.transpose(img_array.numpy(), (1, 2, 0))
 
+            if predicted_labels is not None and true_labels is not None:
+                predicted_label = predicted_labels[i]
+                true_label = true_labels[i]
+                color = "green" if true_label == predicted_label else "red"
+                title_label = str(predicted_label)
+            elif predicted_labels is not None:
+                predicted_label = str(int(predicted_labels[i]))
+                title_label = predicted_label
+            elif true_labels is not None:
+                true_label = true_labels[i]
+                title_label = str(int(true_label))
+            else:
+                raise RuntimeError
+
             ax.ravel()[i].imshow(img_array.astype('uint8'))
+            ax.ravel()[i].set_title(title_label, color=color)
+            ax.ravel()[i].set_axis_off()
     else:
         for i, image_filepath in enumerate(images_filepaths):
             image = cv2.imread(image_filepath)
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            true_label = os.path.normpath(image_filepath).split(os.sep)[-2]
-            predicted_label = predicted_labels[i] if predicted_labels else true_label
-            color = "green" if true_label == predicted_label else "red"
+            if predicted_labels is not None and true_labels is not None:
+                predicted_label = predicted_labels[i]
+                true_label = true_labels[i]
+                color = "green" if true_label == predicted_label else "red"
+                title_label = str(predicted_label)
+            elif predicted_labels is not None:
+                predicted_label = str(int(predicted_labels[i]))
+                title_label = predicted_label
+            elif true_labels is not None:
+                true_label = true_labels[i]
+                title_label = str(int(true_label))
+            else:
+                raise RuntimeError
+
             ax.ravel()[i].imshow(image)
-            ax.ravel()[i].set_title(predicted_label, color=color)
+            ax.ravel()[i].set_title(title_label, color=color)
             ax.ravel()[i].set_axis_off()
     plt.tight_layout()
     plt.show()
