@@ -38,6 +38,8 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
         # Optimizer
         self.optimizer = None
+        # TODO: change self.clipping if want to modify gradients
+        self.clip_grad = False
         self.scheduler: Optional[Any] = None
 
         # loss function
@@ -171,6 +173,19 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         else:
             raise TypeError
 
+        """
+        This method is prefer but in case of pytorch < 1.6, torch.cuda.amp is not defined
+        '''
+           `enabled`, an optional convenience argument to autocast and GradScaler. 
+           If False, autocast and GradScaler’s calls become no-ops. 
+           This allows switching between default precision and mixed precision without if/else statements.
+        '''
+       
+        # amp / (cuda or cpu)
+        with torch.cuda.amp.autocast(enabled=self.fp16):
+            output = self(data)
+            loss = self.loss_fn(output, targets)
+         """
         # amp
         if self.fp16:
             with torch.cuda.amp.autocast():
@@ -186,6 +201,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             metrics = self.monitor_metrics(output, targets)
 
         return output, loss, metrics
+
 
     def loss_fn(self, *args, **kwargs):
         """ calculate loss """
@@ -369,8 +385,11 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         # self.optimizer.zero_grad()
 
         # 2nd faster way: set grad to None
-        for param in self.parameters():
-            param.grad = None
+        # for param in self.parameters():
+        #     param.grad = None
+        # or maybe equivalently and concisely
+        self.optimizer.zero_grad(set_to_none=True)
+
 
         _, loss, metrics = self.model_fn(batch)
 
@@ -380,6 +399,17 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             if self.fp16 and torch.cuda.is_available():
                 assert self.scaler is not None, "torch.cuda.amp.GradScaler is not init"
                 self.scaler.scale(loss).backward()
+
+                if self.clip_grad:
+                    # Unscales the gradients of optimizer's assigned params in-place
+                    # Note: unscale_ should only be called once per optimizer per step call,
+                    self.scaler.unscale_(self.optimizer)
+
+                    # Since the gradients of optimizer's assigned params are now unscaled, clips as usual.
+                    # You may use the same value for max_norm here as you would without gradient scaling.
+                    # TODO: change max_norm
+                    torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=0.1)
+
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
@@ -401,7 +431,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         return loss, metrics
 
     def validate_one_epoch(self, valid_loader) -> Tuple[List, Dict]:
-        assert self.phase == 'eval', "self.phase is not 'eval' in training one epoch"
+        assert self.phase == 'eval', "self.phase is not 'eval' in validate one epoch"
         self.eval()
 
         metrics: dict
