@@ -38,11 +38,27 @@ def toc(t_start: float, name: Optional[str] = "Operation", ftime=False) -> None:
 ############################################
 ############################################
 
-def seed_all(seed: int = 42):
+def set_random_seed(seed: int = 42, deterministic: bool = False):
+    """
+    Seed the different random generators.
+
+    :param seed:
+    :param deterministic:
+    """
+    # Seed python RNG
     random.seed(seed)
+    # Seed numpy RNG
     np.random.seed(seed)
+    # seed the RNG for all devices (both CPU and CUDA)
     torch.random.manual_seed(seed)
     torch.cuda.manual_seed(seed)
+
+    if deterministic:
+        # Deterministic operations for CuDNN, it may impact performances
+        torch.backends.cudnn.deterministic = True
+        # Fix use on algorithm instead of randomly searching best one
+        torch.backends.cudnn.benchmark = False
+        raise UserWarning("WARNING: Deterministic operations for CuDNN, it may impact performances")
 
 
 ########################################################################################
