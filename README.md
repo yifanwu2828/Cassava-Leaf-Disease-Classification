@@ -52,16 +52,26 @@ You need to open a new terminal for that path change to take place (to be able t
 ```
 2. Create a conda environment that will contain python 3:
 ```
-conda create -n `<env_name>` python=3.6
+$ conda create -n `<env_name>` python=3.6
 ```
-3. activate the environment (do this every time you open a new terminal and want to run code):
+3. Activate the environment (do this every time you open a new terminal and want to run code):
 ```
-conda activate `<env_name>`
+$ conda activate `<env_name>`
 ```
 
-4. Install the requirements into this conda environment
+4. Install the requirements into this conda environment:
 ```
-pip install --user -r requirements.txt
+$ pip install --user -r requirements.txt
+```
+
+5. Tensorboard might not shift with Pytorch by conda. You can install the latest version as in:
+```
+$ conda install -c conda-forge tensorboard
+```
+
+6. Apart from that, you might also need to install protobuf:
+```
+$ conda install -c conda-forge protobuf
 ```
 
 ## Usage
