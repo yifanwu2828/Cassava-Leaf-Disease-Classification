@@ -385,10 +385,11 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
                 # The best accuracy is 1
                 if save_best and avg_val_epoch_acc is not None:
-                    assert len(avg_val_epoch_acc) == 1, "Compare multiply array value with float is ambiguous"
                     if isinstance(avg_val_epoch_acc, dict):
-                        avg_val_epoch_acc = avg_val_epoch_acc.values()
-                    epoch_acc = float(avg_val_epoch_acc)
+                        epoch_acc = avg_val_epoch_acc.values()
+                    else:
+                        assert avg_val_epoch_acc.size == 1, "Compare multiply array value with float is ambiguous"
+                        epoch_acc = float(avg_val_epoch_acc)
 
                     # Deep copy the model
                     acc_threshold = avg_val_epoch_acc >= better_than
