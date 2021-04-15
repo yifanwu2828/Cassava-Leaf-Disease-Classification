@@ -68,12 +68,11 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         self.phase: str = ''
 
         # Timer
-        self.start_time: float = None
-        self.end_time: float = None
+        self.epoch_start: float = None
+        self.duration: float = None
 
         # Metrics
-        # TODO: record metrics as class attribute
-        self.metrics: dict = {"train": {}, "valid": {}, "test": {}}
+        self.history = None
 
     #######################################################
     def __repr__(self) -> str:
@@ -331,8 +330,8 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
 
         n_epochs_loop = tqdm(range(max_epochs), desc="LDC", leave=True)
-        self.start_time: float = time.time()
         for itr in n_epochs_loop:
+            self.epoch_start: float = time.time()
             # Each epoch has a training and validation phase
             train_epoch_loss: Union[torch.FloatTensor, np.ndarray]
             val_epoch_loss: Union[torch.FloatTensor, np.ndarray, dict]
@@ -417,8 +416,10 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                 **val_metrics,
             )
             self.current_epoch += 1
-        self.end_time: float = time.time() - self.start_time
-
+            self.duration: float = time.time() - self.epoch_start
+        history["epoch"].append(list(range(1, max_epochs+1)))
+        history["duration"].append(self.duration)
+        self.history = history
         return history
 
     def train_one_epoch(self, train_loader) -> Tuple[List, Optional[dict]]:
