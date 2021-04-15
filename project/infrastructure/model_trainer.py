@@ -327,8 +327,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
         # Used for saving best model
         history: Dict[str, List] = defaultdict(list)
-        best_model_wts = None
-        best_acc = 0.0
+        best_acc: float = 0.0
 
 
         n_epochs_loop = tqdm(range(max_epochs), desc="LDC", leave=True)
@@ -380,9 +379,8 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                     # Call this method to make sure that all pending events have been written to disk.
                     self.writer.flush()
 
+
                 # TODO: deep copy model every time meet max acc is not efficient
-
-
                 # The best accuracy is 1
                 if save_best and avg_val_epoch_acc is not None:
                     if isinstance(avg_val_epoch_acc, dict):
@@ -391,20 +389,20 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                         assert avg_val_epoch_acc.size == 1, "Compare multiply array value with float is ambiguous"
                         epoch_acc = float(avg_val_epoch_acc)
 
-                    # Deep copy the model
                     acc_threshold = avg_val_epoch_acc >= better_than
                     if epoch_acc > best_acc and acc_threshold:
                         best_acc = epoch_acc
-                        best_model_wts = copy.deepcopy(self.state_dict())
-                    # Save best model
-                    PATH = f"../model/test_ldc.pth"
-                    torch.save(
-                        {
-                            'epoch': itr,
-                            'model_state_dict': best_model_wts,
-                            'acc': epoch_acc,
-                        }, PATH
-                    )
+                        # best_model_wts = copy.deepcopy(self.state_dict())
+
+                        # Save best model
+                        PATH = f"../model/test_ldc.pth"
+                        torch.save(
+                            {
+                                'epoch': itr,
+                                'model_state_dict': self.state_dict(),
+                                'acc': epoch_acc,
+                            }, PATH
+                        )
             else:
                 avg_val_epoch_loss: dict = {}
                 val_metrics: dict = {}
@@ -419,12 +417,9 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                 **val_metrics,
             )
             self.current_epoch += 1
-
         self.end_time: float = time.time() - self.start_time
-        if best_model_wts is None:
-            message = f"WARNING: Best_model_wts is None!!"
-            warnings.warn(message, UserWarning, stacklevel=2)
-        return history, best_model_wts
+
+        return history
 
     def train_one_epoch(self, train_loader) -> Tuple[List, Optional[dict]]:
         """ train_one_epoch """
