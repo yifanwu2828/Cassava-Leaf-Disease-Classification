@@ -16,7 +16,6 @@ from tqdm import tqdm
 
 import project.infrastructure.pytorch_util as ptu
 import project.infrastructure.utils as utils
-from project.infrastructure.logger import Logger
 
 
 
@@ -85,14 +84,14 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
     def init_trainer(self, params: dict) -> None:
         """ Init Trainer"""
         self.params: dict = params
-        # self.logger = Logger(self.params['logdir'])
-        log_dir = params['logdir'] if 'logdir' in params.keys() else '../../runs/'
-        self.exp_name = params['exp'] if 'exp' in params.keys() else 'my_experiment'
+
+        log_dir = params.get('logdir', '../../runs/')
+        self.exp_name = params.get('exp', 'my_experiment')
         self.writer = SummaryWriter(log_dir=log_dir, comment=self.exp_name)
 
         # Set random seeds
-        seed: int = self.params['seed'] if 'seed' in self.params.keys() else 42
-        utils.seed_all(seed)
+        seed: int = self.params.get('seed', 42)
+        utils.set_random_seed(seed)
 
         # init gpu
         self.params['use_gpu']: bool = not self.params['no_gpu']
@@ -102,25 +101,15 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         )
         self.device: torch.device = ptu.device
 
-        self.fp16: bool = params["fp16"]
+        # self.fp16: bool = params["fp16"]
+        self.fp16: bool = params.get("fp16", False)
         if self.fp16 and self.params['use_gpu']:
             self.scaler = torch.cuda.amp.GradScaler()
-
         print(f"############ {self.device}: AMP={self.fp16} ############")
 
-        try:
-            self.optimizer = params["optimizer"]
-        except KeyError:
-            pass
-        try:
-            self.scheduler = params["scheduler"]
-        except KeyError:
-            pass
-        try:
-            self.criterion = params["criterion"]
-        except KeyError:
-            pass
-
+        self.optimizer = params.get("optimizer")
+        self.scheduler = params.get("scheduler")
+        self.criterion = params.get("criterion")
     #######################################################
 
     @abc.abstractmethod
@@ -136,13 +125,13 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         """
         return
 
-    def config_criterion(self, *args, **kwargs):
+    def config_criterion(self, *args, **kwargs) -> Optional[Any]:
         """
         must overwrite define optimizer
         """
         return
 
-
+    #######################################################
 
     @abc.abstractmethod
     def forward(self, *args, **kwargs):
@@ -152,14 +141,17 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         return super().forward(*args, **kwargs)
 
     def model_fn(self, batch: Union[Dict, List, Tuple]) -> Tuple[torch.FloatTensor, torch.FloatTensor, Dict]:
-
+        """
+        Forward function of the model
+        :param batch: one batch of data contain
+        :return: output, loss, metrics
+        """
         assert len(batch) == 1 or len(batch) == 2, "batch should be a pair for supervised learning"
         data: torch.FloatTensor
         targets: Optional[torch.Tensor] = None
         output: torch.FloatTensor
-        loss: torch.FloatTensor
+        loss: Optional[torch.FloatTensor]
         metrics: Optional[dict] = {}
-
 
         # if batch is a dictionary
         if isinstance(batch, dict):
@@ -169,18 +161,21 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             if len(name) == 1:
                 data = batch[name[0]].to(self.device, non_blocking=True)
             # supervised learning (data, target) pair
-            else:  # len(name) == 2
+            elif len(name) == 2:
                 data = batch[name[0]].to(self.device, non_blocking=True)
                 targets = batch[name[1]].to(self.device, non_blocking=True)
+            else:  # more elements
+                raise NotImplementedError("Check if more elements Needed")
 
         # batch is a List or Tuple
         elif isinstance(batch, tuple) or isinstance(batch, list):
             data, targets = batch
             data = data.to(device=self.device, non_blocking=True)
             targets = targets.to(device=self.device, non_blocking=True)
-
         else:
-            raise TypeError
+            raise TypeError("Implemented batch contain type other than Tuple, List, Dict  ")
+
+        #####################################################################################
 
         """
         This method is prefer but in case of pytorch < 1.6, torch.cuda.amp is not defined
@@ -189,12 +184,12 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
            If False, autocast and GradScaler’s calls become no-ops. 
            This allows switching between default precision and mixed precision without if/else statements.
         '''
-       
+        """
         # amp / (cuda or cpu)
-        with torch.cuda.amp.autocast(enabled=self.fp16):
-            output = self(data)
-            loss = self.loss_fn(output, targets)
-         """
+        # with torch.cuda.amp.autocast(enabled=self.fp16):
+        #     output = self(data)
+        #     loss = self.loss_fn(output, targets)
+
         # amp
         if self.fp16:
             with torch.cuda.amp.autocast():
@@ -208,25 +203,40 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         # Record metrics if has target
         if targets is not None:
             metrics = self.monitor_metrics(output, targets)
+            if self.phase == 'train':
+                try:
+                    metrics['train_acc'] = metrics.pop("acc")
+                except KeyError:
+                    pass
+
+            elif self.phase == 'eval':
+                try:
+                    metrics['val_acc'] = metrics.pop("acc")
+                except KeyError:
+                    pass
 
         return output, loss, metrics
 
+    #####################################################################
 
     def loss_fn(self, *args, **kwargs):
-        """ calculate loss """
-        # can overwrite this function to computer a much complex loss function
-        # if targets is None or self.criterion is None:
-        #     print("Targets is None or Criterion is None")
-        #     return None
-        # return self.criterion(outputs, targets)
+        """
+        calculate loss
+          overwrite this function to computer a much complex loss function
+          template:
+          if targets is None or self.criterion is None:
+            print("Targets is None or Criterion is None")
+            return None
+        return self.criterion(outputs, targets)
+        """
         return
 
     #####################################################################
     def fit(
             self,
-            train_dataset,
+            train_dataset: Dataset,
             train_batch_size: int,
-            valid_dataset,
+            valid_dataset: Dataset,
             valid_batch_size: int,
             max_epochs: int,
             device: torch.device,
@@ -236,15 +246,30 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             num_workers: int = 4,
             use_fp16: bool = False,
             save_best: bool = False,
+            better_than: float = 0.8
     ):
         """ fit the model """
+        assert isinstance(max_epochs, int)
+        assert isinstance(train_batch_size, int)
+        assert isinstance(valid_batch_size, int)
+        assert isinstance(num_workers, int)
+        assert isinstance(better_than, float)
+        assert isinstance(device, torch.device)
+        assert max_epochs > 0
+        assert train_batch_size > 0
+        assert valid_batch_size > 0
+        assert 0 <= better_than <= 1  # if acc is better than float(better_than) save the model
+        assert num_workers >= -1
+
         self.fp16: int = use_fp16
 
         # use all workers if -1
         self.num_workers: int = psutil.cpu_count() if num_workers == -1 else num_workers
         pin_memory: bool = True if torch.cuda.is_available() else False
 
-        if self.train_loader is None:
+        # Create Training Dataloader
+        if self.train_loader is None and train_dataset is not None:
+            print("\nCreating Training Dataloader...")
             self.train_loader = DataLoader(
                 dataset=train_dataset,
                 batch_size=train_batch_size,
@@ -255,8 +280,12 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                 collate_fn=None,
                 pin_memory=pin_memory
             )
+        else:
+            raise ValueError("Please provide training dataset")
 
+        # Create Validation Dataloader
         if self.valid_loader is None and valid_dataset is not None:
+            print("\nCreating Validation Dataloader...")
             self.valid_loader = DataLoader(
                 dataset=valid_dataset,
                 batch_size=valid_batch_size,
@@ -268,24 +297,28 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                 pin_memory=pin_memory
             )
 
+        # If model is not on correct device send it to device
         self.device: torch.device = device
         if next(self.parameters()).device != device:
             self.to(device)
 
+        # Fetch optimizer
         if self.optimizer is None:
             try:
                 self.optimizer = self.config_optimizer()
             except NotImplementedError:
                 raise NotImplementedError("Optimizer is not implemented")
 
+        # Fetch scheduler if provided
         if self.scheduler is None:
             assert self.optimizer is not None, "Please set up optimizer first"
             self.scheduler: Optional[Any] = self.config_scheduler()
 
+        # Fetch criterion if provided (if supervised learning)
         if self.criterion is None:
-            self.criterion = self.config_criterion()
+            self.criterion: Optional[Any] = self.config_criterion()
 
-        # device indicator for progress bar
+        # Device indicator for progress bar
         global DEVICE
         if torch.cuda.is_available():
             DEVICE = 'AMP' if self.fp16 else 'cuda'
@@ -297,10 +330,10 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         best_model_wts = None
         best_acc = 0.0
 
-        self.start_time: float = time.time()
-        n_epochs_loop = tqdm(range(max_epochs), desc="LDC", leave=True)
-        for itr in n_epochs_loop:
 
+        n_epochs_loop = tqdm(range(max_epochs), desc="LDC", leave=True)
+        self.start_time: float = time.time()
+        for itr in n_epochs_loop:
             # Each epoch has a training and validation phase
             train_epoch_loss: Union[torch.FloatTensor, np.ndarray]
             val_epoch_loss: Union[torch.FloatTensor, np.ndarray, dict]
@@ -308,38 +341,58 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
             # Training Phase
             self.phase = 'train'
-            train_epoch_loss, _ = self.train_one_epoch(self.train_loader, epoch_index=itr)
+            train_epoch_loss, train_metrics = self.train_one_epoch(self.train_loader)
+
+            # calculate mean of metrics
+            # TODO: adjust in case metrics cannot take average
             avg_train_epoch_loss = np.mean(train_epoch_loss)
-            # Record training loss
             history["train_loss"].append(avg_train_epoch_loss)
+
+            # Record metrics
+            for k, v in train_metrics.items():
+                train_metrics[k] = np.mean(v)
+                history[k].append(v)
+            avg_train_epoch_acc: Union[Dict, np.ndarray] = train_metrics.get('train_acc', {})
 
             # Validation phase
             self.phase = 'eval'
             if self.valid_loader:
-                val_epoch_loss, val_metrics = self.validate_one_epoch(self.valid_loader, epoch_index=itr)
+                val_epoch_loss, val_metrics = self.validate_one_epoch(self.valid_loader)
                 avg_val_epoch_loss = np.mean(val_epoch_loss)
                 history["val_loss"].append(avg_val_epoch_loss)
-                # Record Validation loss and metrics
+
                 for k, v in val_metrics.items():
                     val_metrics[k] = np.mean(v)
                     history[k].append(v)
+                avg_val_epoch_acc: Union[Dict, np.ndarray] = val_metrics.get('val_acc', {})
 
                 # log Training and Validation loss to Tensorboard
-                self.writer.add_scalars(
-                    'Epoch_Loss',
-                    {
-                        'Training': avg_train_epoch_loss,
-                        'Validation': avg_val_epoch_loss,
-                    }, self.current_epoch + 1
-                )
-                # Call this method to make sure that all pending events have been written to disk.
-                self.writer.flush()
+                if self.writer is not None:
+                    self.writer.add_scalars(
+                        'Epoch',
+                        {
+                            'Training_Loss': avg_train_epoch_loss,
+                            'Training_Acc': avg_train_epoch_acc,
+                            'Validation_Loss': avg_val_epoch_loss,
+                            'Validation_Acc': avg_val_epoch_acc,
+                        }, self.current_epoch + 1
+                    )
+                    # Call this method to make sure that all pending events have been written to disk.
+                    self.writer.flush()
 
-                # Deep copy the model for saving
-                if save_best and val_metrics["acc"] is not None:
-                    assert val_metrics["acc"].size == 1, "Compare multiply array value with float is ambiguous"
-                    epoch_acc = float(val_metrics["acc"])
-                    if epoch_acc > best_acc:
+                # TODO: deep copy model every time meet max acc is not efficient
+
+
+                # The best accuracy is 1
+                if save_best and avg_val_epoch_acc is not None:
+                    assert len(avg_val_epoch_acc) == 1, "Compare multiply array value with float is ambiguous"
+                    if isinstance(avg_val_epoch_acc, dict):
+                        avg_val_epoch_acc = avg_val_epoch_acc.values()
+                    epoch_acc = float(avg_val_epoch_acc)
+
+                    # Deep copy the model
+                    acc_threshold = avg_val_epoch_acc >= better_than
+                    if epoch_acc > best_acc and acc_threshold:
                         best_acc = epoch_acc
                         best_model_wts = copy.deepcopy(self.state_dict())
                     # Save best model
@@ -361,49 +414,35 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             n_epochs_loop.set_postfix(
                 train_loss=avg_train_epoch_loss,
                 val_loss=avg_val_epoch_loss,
-                **val_metrics
+                **train_metrics,
+                **val_metrics,
             )
             self.current_epoch += 1
 
         self.end_time: float = time.time() - self.start_time
-        self.writer.close()
         if best_model_wts is None:
             message = f"WARNING: Best_model_wts is None!!"
             warnings.warn(message, UserWarning, stacklevel=2)
         return history, best_model_wts
 
-    def train_one_epoch(self, train_loader, epoch_index) -> Tuple[List, Optional[dict]]:
+    def train_one_epoch(self, train_loader) -> Tuple[List, Optional[dict]]:
         """ train_one_epoch """
         assert self.phase == 'train', "self.phase is not 'train' in training one epoch"
         self.train()
         # print('\nTrain One Epoch...')
 
         train_losses: List = []
-        train_metrics: Optional[dict] = None
-        # train_metrics = defaultdict(list)
-        running_loss = 0.0
+        train_metrics: Optional[dict] = defaultdict(list)
 
-        # tk0 = tqdm(train_loader, total=len(train_loader), leave=False)
-        tk0 = train_loader
+        tk0 = tqdm(train_loader, total=len(train_loader),
+                   desc=f"Train One Epoch: {self.current_epoch}",
+                   leave=False, disable=True)
         for batch_idx, train_batch in enumerate(tk0):
             # train_batch is a tuple: (data, targets)
-            loss, train_metrics = self.train_one_step(train_batch)
-
-            # Record train loss and metrics
-            np_loss = ptu.to_numpy(loss)
-            train_losses.append(np_loss)
-            # for k, v in metrics.items():
-            #     train_metrics[k].append(v)
-
-            # Record loss to tensorboard
-            running_loss += float(np_loss)
-            if batch_idx % 1000 == 999:     # every 1000 mini-batches...
-                last_loss = running_loss / 1000
-                tb_x = epoch_index * len(train_loader) + batch_idx + 1
-                self.writer.add_scalar('batch_loss/train', last_loss, tb_x)
-                self.writer.flush()
-                running_loss = 0.0
-
+            loss, metric = self.train_one_step(train_batch)
+            train_losses.append(ptu.to_numpy(loss))
+            for k, v in metric.items():
+                train_metrics[k].append(v)
             self.current_train_step += 1
         return train_losses, train_metrics
 
@@ -424,10 +463,8 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         # 2nd faster way: set grad to None
         for param in self.parameters():
             param.grad = None
-
-        # or maybe equivalently and concisely (available in later Pytorch version)
+        # # or maybe equivalently and concisely (only available at later version)
         # self.optimizer.zero_grad(set_to_none=True)
-
 
         _, loss, metrics = self.model_fn(batch)
 
@@ -442,7 +479,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                     # Unscales the gradients of optimizer's assigned params in-place
                     # Note: unscale_ should only be called once per optimizer per step call,
                     self.scaler.unscale_(self.optimizer)
-
+                    print("here at self.train_one_step/clip_grad")
                     # Since the gradients of optimizer's assigned params are now unscaled, clips as usual.
                     # You may use the same value for max_norm here as you would without gradient scaling.
                     # TODO: change max_norm
@@ -468,7 +505,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         _, loss, metrics = self.model_fn(data)
         return loss, metrics
 
-    def validate_one_epoch(self, valid_loader, epoch_index) -> Tuple[List, Dict]:
+    def validate_one_epoch(self, valid_loader) -> Tuple[List, Dict]:
         assert self.phase == 'eval', "self.phase is not 'eval' in validate one epoch"
         self.eval()
 
@@ -476,30 +513,14 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         val_losses: List = []
         val_metrics: Dict[str, list] = defaultdict(list)
 
-        running_loss = 0.0
-
         # tk0 = tqdm(valid_loader, total=len(valid_loader))
         tk0 = valid_loader
         for batch_idx, batch in enumerate(tk0):
             with torch.no_grad():
-                # Calculate valid loss and metrics
                 loss, metrics = self.validate_one_step(batch)
-            # record valid loss
-            np_loss = ptu.to_numpy(loss)
-            val_losses.append(np_loss)
-            # record valid metrics
+            val_losses.append(ptu.to_numpy(loss))
             for k, v in metrics.items():
                 val_metrics[k].append(v)
-
-            # Record loss to tensorboard
-            running_loss += float(np_loss)   # len(np_loss) == 1
-            if batch_idx % 1000 == 999:  # every 1000 mini-batches...
-                last_loss = running_loss / 1000
-                tb_x = epoch_index * len(valid_loader) + batch_idx + 1
-                self.writer.add_scalar('batch_loss/test', last_loss, tb_x)
-                self.writer.flush()
-                running_loss = 0.0
-
             self.current_valid_step += 1
         return val_losses, val_metrics
 
