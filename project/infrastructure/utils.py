@@ -77,6 +77,27 @@ def calc_n_out(n_in: int, k: int, s: int, p: int):
 
 ############################################
 ############################################
+def select_n_random(data, labels=None, n=100):
+    """
+    Selects n random datapoints and their corresponding labels from a dataset
+    """
+    random_label = None
+    try:
+        perm = torch.randperm(len(data))
+    except ModuleNotFoundError:
+        perm = np.random.permutation(len(data))
+
+    random_data = data[perm][:n]
+
+    if labels:
+        assert len(data) == len(labels)
+        random_label = labels[perm][:n]
+
+    return random_data, random_label
+
+
+############################################
+############################################
 
 def matplotlib_imshow(img: torch.Tensor, one_channel=False, title=None):
     if one_channel:

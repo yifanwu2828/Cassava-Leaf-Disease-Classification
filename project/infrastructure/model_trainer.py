@@ -71,6 +71,8 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         # Timer
         self.epoch_start: float = None
         self.duration: float = None
+        self.since: float = None
+        self.runtime: float = None
 
         # Metrics
         self.history = None
@@ -274,6 +276,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         assert num_workers >= -1
 
         self.fp16: int = use_fp16
+        self.since = time.time()
 
         # use all workers if -1
         self.num_workers: int = psutil.cpu_count() if num_workers == -1 else num_workers
@@ -416,23 +419,29 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                             }, PATH
                         )
             else:
+                print("\nPlease provide Validation Dataset...")
                 avg_val_epoch_loss: dict = {}
                 val_metrics: dict = {}
 
-            # update progress bar
+            self.current_epoch += 1
+            self.duration: float = time.time() - self.epoch_start
+
+            # Update progress bar
             description: str = f'({DEVICE}) Epoch: {self.current_epoch}'
             n_epochs_loop.set_description(description)
             n_epochs_loop.set_postfix(
+                duration = self.duration,
                 train_loss=avg_train_epoch_loss,
                 val_loss=avg_val_epoch_loss,
                 **train_metrics,
                 **val_metrics,
             )
-            self.current_epoch += 1
-            self.duration: float = time.time() - self.epoch_start
+
         history["epoch"].append(list(range(1, max_epochs+1)))
         history["duration"].append(self.duration)
         self.history = history
+        self.runtime = time.time() - self.since
+        print(f"\nFinish Training in {self.runtime} sec")
         return history
 
     def train_one_epoch(self, train_loader) -> Tuple[List, Optional[dict]]:
