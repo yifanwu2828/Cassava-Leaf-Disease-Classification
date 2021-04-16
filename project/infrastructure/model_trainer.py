@@ -1,6 +1,7 @@
 import abc
 from collections import defaultdict
 from typing import Tuple, List, Dict, Union, Optional, Any
+import os
 import time
 import copy
 import random
@@ -83,9 +84,21 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
     def init_trainer(self, params: dict) -> None:
         """ Init Trainer"""
         self.params: dict = params
-
-        log_dir = params.get('logdir', '../../runs/')
         self.exp_name = params.get('exp', 'my_experiment')
+
+        log_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../runs')
+
+        if not (os.path.exists(log_path)):
+            os.makedirs(log_path)
+
+        logdir = self.exp_name + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+        logdir = os.path.join(log_path, logdir)
+
+        if not (os.path.exists(logdir)):
+            os.makedirs(logdir)
+
+        log_dir = params.get('log_dir', logdir)
+
         self.writer = SummaryWriter(log_dir=log_dir, comment=self.exp_name)
 
         # Set random seeds
