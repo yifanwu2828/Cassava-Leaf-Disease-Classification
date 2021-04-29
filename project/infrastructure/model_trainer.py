@@ -76,6 +76,11 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
 
         # Metrics
         self.history = None
+        self._best_acc = None
+
+    @property
+    def best_acc(self):
+        return self._best_acc
 
     #######################################################
     def __repr__(self) -> str:
@@ -410,6 +415,11 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
                         # best_model_wts = copy.deepcopy(self.state_dict())
 
                         # Save best model
+                        model_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../model')
+                        # Create model folder if ../model do not exists
+                        if not (os.path.exists(model_path)):
+                            os.makedirs(model_path)
+
                         PATH = f"../model/test_ldc.pth"
                         torch.save(
                             {
@@ -430,7 +440,7 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
             description: str = f'({DEVICE}) Epoch: {self.current_epoch}'
             n_epochs_loop.set_description(description)
             n_epochs_loop.set_postfix(
-                duration = self.duration,
+                duration=self.duration,
                 train_loss=avg_train_epoch_loss,
                 val_loss=avg_val_epoch_loss,
                 **train_metrics,
@@ -440,8 +450,10 @@ class Model(nn.Module, metaclass=abc.ABCMeta):
         history["epoch"].append(list(range(1, max_epochs+1)))
         history["duration"].append(self.duration)
         self.history = history
+        self.best_acc = best_acc
         self.runtime = time.time() - self.since
-        print(f"\nFinish Training in {self.runtime} sec")
+        print(f"\nFinish Training in {self.runtime:.2f} sec",
+              f"Best_ACC: {best_acc}")
         return history
 
     def train_one_epoch(self, train_loader) -> Tuple[List, Optional[dict]]:
